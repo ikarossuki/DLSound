@@ -1,0 +1,10 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <corners android:radius="12dp" />
+            <gradient android:angle="315" android:startColor="@color/dl_sound_iris"
+                android:endColor="@color/dl_sound_deep_iris" />
+        </shape>
+    </item>
+    <item android:drawable="@drawable/dl_sound_mark" />
+</layer-list>

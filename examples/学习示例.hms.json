@@ -1,0 +1,51 @@
+{
+  "format": "himitsu-subtitles",
+  "version": 1,
+  "documentId": "learning-demo-001",
+  "cues": [
+    {
+      "id": "line-001",
+      "kind": "dialogue",
+      "startMs": 1200,
+      "endMs": 5500,
+      "ja": [
+        { "text": "人間", "reading": "にんげん" },
+        { "text": "は" },
+        { "text": "言葉", "reading": "ことば" },
+        { "text": "を" },
+        { "text": "使", "reading": "つか" },
+        { "text": "います。" }
+      ],
+      "zh": "人类使用语言。"
+    },
+    {
+      "id": "line-002",
+      "kind": "dialogue",
+      "startMs": 6000,
+      "endMs": 10000,
+      "ja": "日本語を勉強しています。",
+      "zh": "我正在学习日语。"
+    },
+    {
+      "id": "scene-001",
+      "kind": "scene",
+      "startMs": 10000,
+      "endMs": 15000,
+      "ja": "雨の音",
+      "zh": "雨声"
+    },
+    {
+      "id": "line-003",
+      "kind": "dialogue",
+      "startMs": 11000,
+      "endMs": 15000,
+      "ja": [
+        { "text": "今日", "reading": "きょう" },
+        { "text": "は" },
+        { "text": "雨", "reading": "あめ" },
+        { "text": "ですね。" }
+      ],
+      "zh": "今天下雨了呢。"
+    }
+  ]
+}

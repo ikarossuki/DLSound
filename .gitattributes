@@ -1,0 +1,3 @@
+# Preserve exact generated assets and upstream license-comment spacing.
+android/app/src/main/assets/player/** -text -whitespace
+web-ui/index.html text eol=lf

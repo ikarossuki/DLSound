@@ -1,0 +1,12 @@
+<resources>
+    <style name="HimitsuTheme" parent="Theme.Material3.DayNight.NoActionBar">
+        <!-- Upstream timer fields treat dividerHorizontal as a color, not a drawable. -->
+        <item name="dividerHorizontal">?attr/colorSurfaceVariant</item>
+        <item name="disabledColor">?attr/colorOnSurfaceVariant</item>
+        <item name="textColorDisabled">?attr/colorOnSurfaceVariant</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="materialButtonStyle">@style/Widget.Material3.Button.TextButton</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

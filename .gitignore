@@ -1,0 +1,22 @@
+# Local builds, downloaded archives, caches and test evidence stay in the workspace.
+.local/
+downloads/
+scratch/
+artifacts/
+smp-mappings/
+.impeccable/review/*.png
+.impeccable/review/*.xml
+.gradle/
+.kotlin/
+.idea/
+**/build/
+local.properties
+*.iml
+*.hprof
+*.jks
+*.keystore
+*.p12
+*.dpapi
+__pycache__/
+*.pyc
+

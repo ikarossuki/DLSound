@@ -1,0 +1,5 @@
+Lcom/github/anrimian/musicplayer/lite/LiteApp;
+HSPLcom/github/anrimian/musicplayer/lite/LiteApp;->initComponents(Landroid/content/Context;)V
+HSPLcom/github/anrimian/musicplayer/App;->onCreate()V
+Lcom/github/anrimian/musicplayer/ui/v12/PlayerV12Activity;
+HSPLcom/github/anrimian/musicplayer/ui/v12/PlayerV12Activity;->onCreate(Landroid/os/Bundle;)V

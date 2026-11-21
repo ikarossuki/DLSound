@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name" translatable="false">@string/himitsu_app_name</string>
+    <color name="dl_sound_iris">#5869DB</color>
+    <color name="dl_sound_deep_iris">#343FA3</color>
+</resources>

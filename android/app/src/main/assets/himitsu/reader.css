@@ -1,0 +1,29 @@
+:root {
+  color-scheme: light dark;
+  --surface: Canvas;
+  --ink: CanvasText;
+  --secondary: CanvasText;
+  --active-surface: Canvas;
+  --font-size: 23px;
+}
+* { box-sizing: border-box; }
+html { background: var(--surface); color: var(--ink); }
+body { margin: 0; padding: 12px 12px 32px; font-family: sans-serif; }
+::selection { background: var(--active-surface); color: var(--ink); }
+#transcript { max-width: 760px; margin: 0 auto; }
+.cue { padding: 14px 12px 18px; margin: 0 0 8px; border-radius: 12px; cursor: pointer; }
+.cue:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.cue.current { background: var(--active-surface); }
+.cue.current .ja { font-weight: 600; }
+.time { font-size: 12px; line-height: 1.5; color: var(--secondary); font-variant-numeric: tabular-nums; margin-bottom: 4px; }
+.ja { font-size: var(--font-size); line-height: 1.95; line-break: strict; overflow-wrap: anywhere; white-space: pre-wrap; }
+.zh { font-size: calc(var(--font-size) * .82); line-height: 1.7; margin-top: 5px; white-space: pre-wrap; overflow-wrap: anywhere; }
+ruby { ruby-position: over; ruby-align: center; }
+rt { font-size: .5em; font-weight: 400; line-height: 1; user-select: none; }
+.missing { font-size: 14px; line-height: 1.6; color: var(--secondary); }
+.scene .ja, .scene .zh { font-size: 14px; line-height: 1.7; }
+#empty { max-width: 36em; margin: 40px auto; padding: 0 12px; font-size: 16px; line-height: 1.8; color: var(--secondary); }
+[hidden], body[data-mode="CHINESE"] .ja:not(.unlabelled), body[data-mode="CHINESE"] .missing-ja,
+body[data-mode="JAPANESE"] .zh, body[data-mode="JAPANESE"] .missing-zh { display: none; }
+body[data-furigana="false"] rt { display: none; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
