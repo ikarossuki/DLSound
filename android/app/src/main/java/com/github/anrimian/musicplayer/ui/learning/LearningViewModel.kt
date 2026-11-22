@@ -159,7 +159,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
                 val uri = component.contentSourceHelper().createUri(source).toString()
                 val file = runCatching { component.contentSourceHelper().getAsFile(source) }.getOrNull()
                 val folder = file?.let { files.readableParent(it) }
-                Pair(LearningFile(uri, file?.name ?: title, false, audio = true), folder)
+                Pair(LearningFile(uri, file?.name ?: title, false, audio = true, parentDocument = file?.let(files::parentDocument)), folder)
             }
             main.post {
                 if (cleared || libraryTrackId != id) return@post
@@ -189,7 +189,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
         store.treeUri = uri.toString()
         if (incoming) {
             val track = mutable.value.track ?: return
-            val folder = files.root(uri.toString())
+            val folder = if (track.parentDocument == null) files.root(uri.toString()) else files.grantedParent(track.parentDocument)
             store.trackFolder = folder
             loadSubtitle(track.uri, folder)
             return
@@ -386,7 +386,11 @@ internal class LearningViewModel(application: Application, private val libraryMo
                             libraryPlayer.getCurrentCompositionLyrics().firstOrError()
                                 .timeout(3, java.util.concurrent.TimeUnit.SECONDS).blockingGet().value
                         }.getOrNull() else null
-                        if (embedded.isNullOrBlank()) Triple(null, R.string.himitsu_subtitle_missing, "")
+                        if (embedded.isNullOrBlank()) {
+                            val status = if (files.needsTreeForSidecars(folder)) R.string.himitsu_subtitle_folder_needed
+                                else R.string.himitsu_subtitle_missing
+                            Triple(null, status, "")
+                        }
                         else {
                             val parsed = SubtitleFiles.decode(embedded)
                             val document = if (parsed.cues.isNotEmpty()) parsed else SubtitleDocument(

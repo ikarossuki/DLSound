@@ -25,6 +25,7 @@ import io.reactivex.rxjava3.core.Scheduler
 import io.reactivex.rxjava3.subjects.BehaviorSubject
 import java.util.Collections
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 class StorageScannerRepositoryImpl(
     private val audioCatalogProvider: SystemAudioCatalogProvider,
@@ -40,12 +41,15 @@ class StorageScannerRepositoryImpl(
     private val scheduler: Scheduler
 ) : StorageScannerRepository {
 
+    private val refreshGeneration = AtomicLong()
+    private data class Scan(val generation: Long, val result: StorageAnalyzeResult)
+
     private val rescanStorageSubject = BehaviorSubject.createDefault(Constants.TRIGGER)
 
     private val internalStorageChangesObservable by lazy { createStorageChangesObservable().share() }
 
     override fun getStorageChangesObservable(): Observable<StorageAnalyzeResult> {
-        return internalStorageChangesObservable
+        return internalStorageChangesObservable.map(Scan::result).onErrorResumeNext(::handleScanError)
     }
 
     override fun rescanStorage() {
@@ -53,11 +57,14 @@ class StorageScannerRepositoryImpl(
     }
 
     override fun runRescanStorage(): Completable {
-        return Completable.defer {
-            internalStorageChangesObservable
-                .doOnSubscribe { rescanStorage() }
+        return Completable.create { completion ->
+            val requested = refreshGeneration.incrementAndGet()
+            val subscription = internalStorageChangesObservable
+                .filter { it.generation >= requested }
                 .firstOrError()
-                .ignoreElement()
+                .subscribe({ completion.onComplete() }, { completion.tryOnError(it) })
+            completion.setDisposable(subscription)
+            if (!completion.isDisposed) rescanStorage()
         }
     }
 
@@ -76,7 +83,7 @@ class StorageScannerRepositoryImpl(
         return fileScanner.getStateObservable()
     }
 
-    private fun createStorageChangesObservable(): Observable<StorageAnalyzeResult> {
+    private fun createStorageChangesObservable(): Observable<Scan> {
         return Observable.defer {
             val settingsChangeObservable = Observable.combineLatest(
                 settingsRepository.getAudioFileMinDurationMillisObservable(),
@@ -97,12 +104,12 @@ class StorageScannerRepositoryImpl(
                 .observeOn(scheduler) // required bc rescanObservable can be fired from the main thread
                 .throttleLatest(500, TimeUnit.MILLISECONDS, true)
                 .map {
-                    fetchAndAnalyzeFiles(!isPlaylistScanPerformed).also {
-                        isPlaylistScanPerformed = true
-                    }
+                    val generation = refreshGeneration.get()
+                    val result = fetchAndAnalyzeFiles(!isPlaylistScanPerformed)
+                    isPlaylistScanPerformed = true
+                    Scan(generation, result)
                 }
                 .retry(RETRY_COUNT, ::isStandardError)
-                .onErrorResumeNext(::handleScanError)
                 .subscribeOn(scheduler)
         }
     }

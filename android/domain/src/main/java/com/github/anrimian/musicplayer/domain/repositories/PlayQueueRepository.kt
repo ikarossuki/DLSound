@@ -41,6 +41,8 @@ interface PlayQueueRepository {
 
     fun restoreDeletedItem(): Completable
 
+    fun moveItem(itemId: Long, targetId: Long): Completable
+
     fun swapItems(first: PlayQueueItem, second: PlayQueueItem): Completable
 
     fun addCompositionsToPlayNext(compositions: List<CompositionModel>): Completable

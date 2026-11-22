@@ -114,6 +114,12 @@ interface PlayQueueDao {
     """)
     fun increaseShuffledPosition(increaseBy: Int, position: Int)
 
+    @Query("SELECT * FROM play_queue WHERE position BETWEEN :low AND :high ORDER BY position")
+    fun itemsByPosition(low: Int, high: Int): List<PlayQueueEntity>
+
+    @Query("SELECT * FROM play_queue WHERE shuffledPosition BETWEEN :low AND :high ORDER BY shuffledPosition")
+    fun itemsByShuffledPosition(low: Int, high: Int): List<PlayQueueEntity>
+
     @Query("SELECT MAX(position) FROM play_queue")
     fun getLastPosition(): Int
 

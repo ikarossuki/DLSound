@@ -269,19 +269,19 @@ open class PlayerV12Activity : AppCompatActivity() {
             }
             if(state.noticeSequence != lastNotice) { lastNotice = state.noticeSequence; if(state.notice != 0) { error(getString(state.notice)); if(externalView && state.track==null) emit(obj("incomingError" to "无法读取此音频，请从文件管理器重新打开并允许访问。")) } }
             val status = getString(state.subtitleStatus)
-            if (status != lastSubtitleStatus) { lastSubtitleStatus = status; emit(obj("subtitleStatus" to status, "subtitleError" to if(state.subtitleStatus in listOf(R.string.himitsu_subtitle_error,R.string.himitsu_subtitle_version,R.string.himitsu_subtitle_time,R.string.himitsu_subtitle_ids,R.string.himitsu_subtitle_large)) status else "")) }
+            if (status != lastSubtitleStatus) { lastSubtitleStatus = status; emit(obj("subtitleStatus" to status, "subtitleFolderNeeded" to (state.subtitleStatus == R.string.himitsu_subtitle_folder_needed), "subtitleError" to if(state.subtitleStatus in listOf(R.string.himitsu_subtitle_error,R.string.himitsu_subtitle_version,R.string.himitsu_subtitle_time,R.string.himitsu_subtitle_ids,R.string.himitsu_subtitle_large)) status else "")) }
             emit(obj("manual" to (state.track?.let { store.manualUri(it.uri) != null } == true), "subtitleName" to state.subtitleName, "readingBusy" to state.readingBusy, "readingFailed" to state.readingFailed))
         } }
         if (Permissions.hasFilePermission(this)) startLibrary()
         web.loadUrl("https://$HOST/")
     }
 
-    private fun startLibrary() {
+    private fun startLibrary(triggerScan: Boolean = true) {
         if (started || externalView) return
         started = true
         component.musicServiceInteractor().prepare()
         component.storageScannerInteractor().runStorageObserver()
-        component.storageScannerInteractor().rescanStorage()
+        if (triggerScan) component.storageScannerInteractor().rescanStorage()
         librarySubscriptions.add(component.libraryRepository().getAllCompositionsObservable(null)
             .switchMapSingle { items -> Single.fromCallable {
                 val locations = component.compositionsDao().getLibraryFileLocations().associateBy { it.id }
@@ -379,11 +379,7 @@ open class PlayerV12Activity : AppCompatActivity() {
                         if(data.optBoolean("next")) player.addCompositionsToPlayNext(listOf(t)).await() else player.addCompositionsToEnd(listOf(t)).await()
                     }
                     "remove" -> queue.find { it.itemId.toString() == data.getString("itemId") }?.let { player.removeQueueItem(it).await() }
-                    "move" -> {
-                        val at = queue.indexOfFirst { it.itemId.toString() == data.getString("itemId") }
-                        val to = at + data.getInt("step")
-                        if(at >= 0 && to in queue.indices) player.swapItems(queue[at],queue[to]).await()
-                    }
+                    "move" -> player.moveItem(data.getString("itemId").toLong(), data.getString("targetId").toLong()).await()
                     "clear" -> { timer.cancelEndOfTrack(); player.clearPlayQueue().await() }
                     "pref" -> preference(data)
                     "offset" -> {
@@ -397,10 +393,25 @@ open class PlayerV12Activity : AppCompatActivity() {
                     }; emit(obj("sleep" to data)) }
                     "importSubtitle" -> { pickingTrack = requireNotNull(model.state.value.track) { "请先选择音轨" }.uri; subtitlePicker.launch(arrayOf("*/*")) }
                     "automatic" -> model.automaticSubtitle()
-                    "requestTree" -> treePicker.launch(null)
+                    "requestTree" -> treePicker.launch(model.state.value.track?.parentDocument)
                     "requestMedia" -> requestAccess(Permissions.getFilePermissionName())
                     "requestVideo" -> if(Build.VERSION.SDK_INT>=33) requestAccess(Manifest.permission.READ_MEDIA_VIDEO) else requestAccess(Permissions.getFilePermissionName())
-                    "refresh" -> { librarySubscriptions.clear(); started=false; publishPermission(); if(Permissions.hasFilePermission(this@PlayerV12Activity)) startLibrary() }
+                    "refresh" -> {
+                        publishPermission()
+                        check(Permissions.hasFilePermission(this@PlayerV12Activity)) { "请先允许访问音乐库" }
+                        librarySubscriptions.clear()
+                        started = false
+                        startLibrary(triggerScan = false)
+                        try {
+                            component.storageScannerInteractor().runRescanStorage().timeout(30, TimeUnit.SECONDS).await()
+                        } catch (e: java.util.concurrent.TimeoutException) {
+                            throw IllegalStateException("刷新超时，请重试", e)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            throw IllegalStateException("刷新失败，请重试", e)
+                        }
+                    }
                     "favorite" -> { val values = preferences.getStringSet("favorites",emptySet())!!.toMutableSet(); val value=data.getString("id"); if(!values.add(value)) values.remove(value); preferences.edit().putStringSet("favorites",values).apply(); publishPreferences() }
                     "playlist" -> playlistAction(data)
                     "correction" -> { require(data.optString("key") == snapshot.optString("offsetKey")) { "字幕已变化，请重新选择台词" }; showCorrection(data.optString("cueId"),data.optInt("index",-1)) }

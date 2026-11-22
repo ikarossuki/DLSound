@@ -2,6 +2,8 @@ package com.github.anrimian.musicplayer.ui.learning
 
 import android.content.Context
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
 import android.provider.DocumentsContract
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -12,6 +14,7 @@ import java.nio.charset.CodingErrorAction
 internal data class LearningFile(
     val uri: String, val name: String, val directory: Boolean,
     val size: Long = 0, val modified: Long = 0, val audio: Boolean = false,
+    val parentDocument: Uri? = null,
 )
 
 /** Uses only provider read/query operations; no file path conversion or write operation. */
@@ -49,7 +52,7 @@ internal class SafLearningFiles(private val context: Context) {
             val file=File(requireNotNull(uri.path)).canonicalFile
             val roots=context.getExternalFilesDirs(null).filterNotNull().map { it.canonicalPath.substringBefore("/Android/data/")+"/" }
             require(roots.any { file.path.startsWith(it) } && !file.path.contains("/Android/") && file.isFile && file.canRead())
-            return LearningFile(uri.toString(),file.name,false,file.length(),file.lastModified(),true) to readableParent(file)
+            return LearningFile(uri.toString(),file.name,false,file.length(),file.lastModified(),true, parentDocument(file)) to readableParent(file)
         }
         require(uri.scheme == "content")
         val authority=requireNotNull(uri.authority)
@@ -64,45 +67,55 @@ internal class SafLearningFiles(private val context: Context) {
                 if (it.moveToFirst()) it.getString(0) else null
             }
         }.getOrNull() else null
-        val treeParent = if (uri.authority == "com.android.externalstorage.documents" &&
-            DocumentsContract.isDocumentUri(context, uri)) {
-            val id = DocumentsContract.getDocumentId(uri)
-            val parent = id.substringBeforeLast('/',id.substringBefore(':')+":")
-            context.contentResolver.persistedUriPermissions.firstOrNull {
-                it.isReadPermission && it.uri.authority == uri.authority && DocumentsContract.isTreeUri(it.uri) &&
-                    DocumentsContract.getTreeDocumentId(it.uri).let { root -> root == parent || parent.startsWith(root.trimEnd('/')+"/") || root.endsWith(':') && parent.startsWith(root) }
-            }?.let { DocumentsContract.buildDocumentUriUsingTree(it.uri, parent).toString() }
-        } else null
-        return LearningFile(uri.toString(), name, false, audio = true) to (treeParent ?: path?.let { readableParent(File(it)) })
+        val parent = if (authority == EXTERNAL_DOCUMENTS && DocumentsContract.isDocumentUri(context, uri)) {
+            parentDocumentForId(DocumentsContract.getDocumentId(uri))
+        } else path?.let { parentDocument(File(it)) }
+        return LearningFile(uri.toString(), name, false, audio = true, parentDocument = parent) to
+            (grantedParent(parent) ?: path?.let { readableParent(File(it)) })
     }
 
-    fun readableParent(audioFile: File): String? {
-        val path = audioFile.absolutePath
-        val documentId = if (path.startsWith("/storage/emulated/0/")) {
-            "primary:" + path.removePrefix("/storage/emulated/0/")
-        } else if (path.startsWith("/storage/")) {
-            val relative = path.removePrefix("/storage/")
-            relative.substringBefore('/') + ":" + relative.substringAfter('/')
-        } else null
-        if (documentId != null) {
-            val parentId = documentId.substringBeforeLast('/')
-            context.contentResolver.persistedUriPermissions.filter { it.isReadPermission }.forEach { permission ->
-                val tree = permission.uri
-                if (tree.authority == "com.android.externalstorage.documents" && DocumentsContract.isTreeUri(tree)) {
-                    val root = DocumentsContract.getTreeDocumentId(tree)
-                    if (parentId == root || parentId.startsWith(root.trimEnd('/') + "/") ||
-                        (root.endsWith(':') && parentId.startsWith(root))) {
-                        return DocumentsContract.buildDocumentUriUsingTree(tree, parentId).toString()
-                    }
-                }
-            }
-        }
-        return audioFile.parentFile?.takeIf { it.canRead() }?.let { Uri.fromFile(it).toString() }
+    private fun parentDocumentForId(id: String): Uri {
+        val parent = id.substringBeforeLast('/', id.substringBefore(':') + ":")
+        return DocumentsContract.buildDocumentUri(EXTERNAL_DOCUMENTS, parent)
     }
+
+    fun parentDocument(audioFile: File): Uri? {
+        val path = audioFile.absolutePath
+        val primary = Environment.getExternalStorageDirectory().path
+        val id = when {
+            path.startsWith("$primary/") -> "primary:" + path.removePrefix("$primary/")
+            path.startsWith("/sdcard/") -> "primary:" + path.removePrefix("/sdcard/")
+            path.startsWith("/storage/") -> {
+                val relative = path.removePrefix("/storage/")
+                relative.substringBefore('/') + ":" + relative.substringAfter('/')
+            }
+            else -> return null
+        }
+        return parentDocumentForId(id)
+    }
+
+    fun grantedParent(document: Uri?): String? {
+        if (document == null) return null
+        val parent = DocumentsContract.getDocumentId(document)
+        return context.contentResolver.persistedUriPermissions.firstOrNull {
+            it.isReadPermission && it.uri.authority == EXTERNAL_DOCUMENTS && DocumentsContract.isTreeUri(it.uri) &&
+                DocumentsContract.getTreeDocumentId(it.uri).let { root ->
+                    root == parent || parent.startsWith(if (root.endsWith(':')) root else "$root/")
+                }
+        }?.let { DocumentsContract.buildDocumentUriUsingTree(it.uri, parent).toString() }
+    }
+
+    fun readableParent(audioFile: File): String? = grantedParent(parentDocument(audioFile))
+        ?: audioFile.parentFile?.takeIf { it.canRead() }?.let { Uri.fromFile(it).toString() }
+
+    // Under scoped storage a readable filesystem directory can list audio while hiding VTT and JSON.
+    fun needsTreeForSidecars(folder: String?): Boolean = folder == null ||
+        (Uri.parse(folder).scheme == "file" && Build.VERSION.SDK_INT >= 29 && !Environment.isExternalStorageLegacy())
 
     fun text(uri: String): String = (if (Uri.parse(uri).scheme == "file") File(requireNotNull(Uri.parse(uri).path)).inputStream() else context.contentResolver.openInputStream(Uri.parse(uri)))?.use(::readText) ?: error("file_unavailable")
 
     companion object {
+        private const val EXTERNAL_DOCUMENTS = "com.android.externalstorage.documents"
         const val MAX_BYTES = 8 * 1024 * 1024
         fun readText(input: InputStream): String {
             val bytes = ByteArrayOutputStream()

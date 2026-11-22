@@ -5,12 +5,12 @@
 > <ruby>明日<rp>（</rp><rt>あした</rt><rp>）</rp></ruby>、また。<br>
 > 明天见。
 
-**[下载 Android APK](https://github.com/ikaros0202/DLSound/releases/latest)**　适用于 Android 8.0 及以上。Android 8 已验证系统 WebView 69；更旧的内核可通过设备的应用商店更新 Android System WebView 或 Chrome。在发布页的 **Assets** 中选择扩展名为 `.apk` 的文件。
+**[下载 Android APK](https://github.com/ikarossuki/DLSound/releases/latest)**　适用于 Android 8.0 及以上。Android 8 已验证系统 WebView 69；更旧的内核可通过设备的应用商店更新 Android System WebView 或 Chrome。在发布页的 **Assets** 中选择扩展名为 `.apk` 的文件。[1.3.6 更新说明](docs/releases/v1.3.6.md)
 
 ## 播放自己的音频和字幕
 
 1. **放在同一个文件夹。** 例如把 `散步.mp3` 和 `散步.vtt` 放在一起。音频也可以是 WAV，字幕也可以是 LRC 或 SRT，只要扩展名前的文件名相同即可。字幕使用 UTF-8 编码。
-2. **首次使用时授权。** 打开 DL Sound，允许读取音乐。进入「我的 → 设置 → 文件与曲库 → 字幕目录」，选择刚才的文件夹。
+2. **首次使用时授权。** 打开 DL Sound，允许读取音乐。打开歌词页，点「授权当前音乐文件夹」并确认目录。也可以从「我的 → 设置 → 文件与曲库 → 字幕目录」授权。
 3. **播放并查看歌词。** 从曲库点开音轨，播放器会自动匹配字幕。点播放器上方的「歌词」即可查看，也可以从封面向左滑。双语字幕可用「日／中／双」切换显示，假名可在「我的 → 设置 → 字幕与读音」中单独开关。
 
 ## 哪种字幕适合我？

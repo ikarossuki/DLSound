@@ -153,6 +153,10 @@ class PlayQueueRepositoryImpl(
         }.subscribeOn(scheduler)
     }
 
+    override fun moveItem(itemId: Long, targetId: Long): Completable = Completable.fromAction {
+        playQueueDao.moveItem(itemId, targetId, settingsPreferences.isRandomPlayingEnabled)
+    }.subscribeOn(scheduler)
+
     override fun swapItems(
         first: PlayQueueItem,
         second: PlayQueueItem

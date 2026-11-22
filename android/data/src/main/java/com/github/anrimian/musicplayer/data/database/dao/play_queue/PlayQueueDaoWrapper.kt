@@ -131,6 +131,30 @@ class PlayQueueDaoWrapper(
         return null
     }
 
+    fun moveItem(itemId: Long, targetId: Long, shuffled: Boolean) {
+        if (itemId == targetId) return
+        libraryDatabase.runInTransaction {
+            if (!playQueueDao.exists(itemId) || !playQueueDao.exists(targetId)) return@runInTransaction
+            val position = if (shuffled) playQueueDao::getShuffledPosition else playQueueDao::getPosition
+            val update = if (shuffled) playQueueDao::updateShuffledPosition else playQueueDao::updateItemPosition
+            val from = position(itemId)
+            val to = position(targetId)
+            val low = minOf(from, to)
+            val high = maxOf(from, to)
+            val rows = if (shuffled) playQueueDao.itemsByShuffledPosition(low, high)
+                else playQueueDao.itemsByPosition(low, high)
+            // Move each neighbour into the vacancy, preserving gaps and the unique index.
+            update(itemId, Int.MIN_VALUE)
+            var vacant = from
+            for (row in if (from < to) rows else rows.asReversed()) {
+                if (row.id == itemId) continue
+                update(row.id, vacant)
+                vacant = if (shuffled) row.shuffledPosition else row.position
+            }
+            update(itemId, to)
+        }
+    }
+
     fun swapItems(firstItem: PlayQueueItem, secondItem: PlayQueueItem, shuffleMode: Boolean) {
         libraryDatabase.runInTransaction {
             val firstId = firstItem.itemId

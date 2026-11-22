@@ -30,6 +30,7 @@
     <string name="himitsu_directory_error">目录无法读取，请确认目录仍存在，或重新选择。</string>
     <string name="himitsu_file_unavailable">上次的音轨已无法访问，请从目录中重新选择。</string>
     <string name="himitsu_subtitle_loading">正在读取字幕…</string>
+    <string name="himitsu_subtitle_folder_needed">允许访问音频所在文件夹后，播放器会自动读取该目录及子目录的同名字幕。</string>
     <string name="himitsu_subtitle_missing">未找到同名字幕，可点“字幕”手动选择。</string>
     <string name="himitsu_subtitle_empty">字幕没有有效的定时内容，音频仍可播放。</string>
     <string name="himitsu_subtitle_auto">自动匹配</string>

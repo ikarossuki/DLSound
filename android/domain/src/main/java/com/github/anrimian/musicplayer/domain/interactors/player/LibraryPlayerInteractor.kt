@@ -315,6 +315,8 @@ class LibraryPlayerInteractor(
         return playQueueRepository.restoreDeletedItem()
     }
 
+    fun moveItem(itemId: Long, targetId: Long): Completable = playQueueRepository.moveItem(itemId, targetId)
+
     fun swapItems(firstItem: PlayQueueItem, secondItem: PlayQueueItem): Completable {
         return playQueueRepository.swapItems(firstItem, secondItem)
     }

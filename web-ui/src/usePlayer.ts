@@ -10,7 +10,7 @@ export function command(action:string,data:any={}):Promise<any>{
    const bridge=window.DLSound;
    if(!bridge){reject(Error('本地播放器尚未连接'));return;}
    const id=++serial;
-   const timer=setTimeout(()=>{pending.delete(id);reject(Error('操作超时，请重试'));},30000);
+   const timer=setTimeout(()=>{pending.delete(id);reject(Error(action==='refresh'?'刷新超时，请重试':'操作超时，请重试'));},30000);
    pending.set(id,{resolve,reject,timer});
    try{
      if(bridge.send(JSON.stringify({id,action,data}))===false)throw Error('请求过大，请减少所选音轨数量');
@@ -19,6 +19,18 @@ export function command(action:string,data:any={}):Promise<any>{
    }
  });
 }
+let refreshPending=false;
+async function refreshLibrary(){
+ if(refreshPending)return;
+ refreshPending=true;
+ try{
+   await command('refresh');
+   toast.success('刷新完成',{id:'library-refresh'});
+ }catch(e){
+   toast.error(e instanceof Error?e.message:'刷新失败，请重试',{id:'library-refresh'});
+ }finally{refreshPending=false;}
+}
+
 export function act(action:string,data:any={}){return command(action,data).catch(e=>{toast.error(e.message);});}
 export function readSaved<T>(key:string,fallback:T):T {try{return JSON.parse(sessionStorage.getItem(key)||'null')??fallback;}catch{return fallback;}}
 export function save(key:string,value:unknown){try{sessionStorage.setItem(key,JSON.stringify(value));}catch{}}
@@ -62,9 +74,9 @@ export function usePlayer(watchClock:boolean){
  pref:(key:string,value:any)=>act('pref',{key,value}),toggle:()=>act('toggle'),pause:()=>act('pause'),seek:(ms:number)=>act('seek',{ms}),
  select:(t:Track,_play=true,collection?:Track[])=>act('play',{ids:(collection?.some(x=>x.id===t.id)?collection:[t]).map(x=>x.id),startId:t.id}),playCollection:(ts:Track[])=>act('play',{ids:ts.map(x=>x.id)}),
  skip:(step:number)=>act('skip',{step}),jump:(i:number)=>act('jump',{itemId:s.queue[i]?.itemId}),append:(t:Track,next=false)=>act('append',{id:t.id,next}),
- remove:(itemId:string)=>act('remove',{itemId}),move:(itemId:string,step:number)=>act('move',{itemId,step}),clear:()=>command('clear'),
+ remove:(itemId:string)=>act('remove',{itemId}),move:(itemId:string,targetId:string)=>act('move',{itemId,targetId}),clear:()=>command('clear'),
  setSleep:(v:any)=>act('sleep',v),setOffset:(value:number)=>act('offset',{value,key:s.offsetKey}),importSubtitle:()=>act('importSubtitle'),automatic:()=>act('automatic'),
- correction:(cueId?:string,index?:number)=>act('correction',{cueId,index,key:s.offsetKey}),requestVideo:()=>act('requestVideo'),closeExternal:()=>act('closeExternal'),requestMedia:()=>act('requestMedia'),requestTree:()=>act('requestTree'),refresh:()=>act('refresh'),
+ correction:(cueId?:string,index?:number)=>act('correction',{cueId,index,key:s.offsetKey}),requestVideo:()=>act('requestVideo'),closeExternal:()=>act('closeExternal'),requestMedia:()=>act('requestMedia'),requestTree:()=>act('requestTree'),refresh:refreshLibrary,
  favorite:(id:string)=>act('favorite',{id}),playlist:(action:string,data:any)=>command('playlist',{operation:action,...data}),
  };
 }
