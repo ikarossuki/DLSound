@@ -1,19 +1,15 @@
 package com.github.anrimian.musicplayer.wear.data.repositories
 
 import android.annotation.SuppressLint
-import android.util.Log
 import com.github.anrimian.common.WearableFields
 import com.github.anrimian.musicplayer.wear.domain.models.DeviceState
 import com.github.anrimian.musicplayer.wear.domain.models.ErrorEvent
 import com.github.anrimian.musicplayer.wear.infrastructure.DeviceConnectionController
-import io.reactivex.rxjava3.core.Completable
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.core.Scheduler
-import io.reactivex.rxjava3.core.Single
-import io.reactivex.rxjava3.disposables.Disposable
+import io.reactivex.rxjava3.disposables.SerialDisposable
 import io.reactivex.rxjava3.subjects.BehaviorSubject
 import io.reactivex.rxjava3.subjects.PublishSubject
-import java.util.LinkedList
 import java.util.concurrent.TimeUnit
 
 class HostDeviceRepository(
@@ -22,7 +18,8 @@ class HostDeviceRepository(
     private val timeoutMillis: Long
 ) {
 
-    private val requests = HashMap<Any, StateRequests>()
+    private val requests = mutableMapOf<String, LinkedHashMap<Int, RequestInfo>>()
+    private var nextRequestId = 1
 
     private val errorEventSubject = PublishSubject.create<ErrorEvent>()
 
@@ -44,46 +41,22 @@ class HostDeviceRepository(
     /**
      * @param fallback will be not called for non-last event in multiple events case
      */
-    fun sendEventWithTimeout(
+    @Synchronized fun sendEventWithTimeout(
         eventName: String,
         message: ByteArray? = null,
         targetNode: String? = null,
         fallback: (() -> Unit)?
     ) {
-        val timeoutDisposable = Single.fromCallable {
-            val requests = getRequests(eventName)
-            val shouldIgnoreResponse = requests.size > 1
-            requests.removeFirst()
-            if (!shouldIgnoreResponse) {
-                fallback?.invoke()
+        val id = nextRequestId
+        nextRequestId = if (id == Int.MAX_VALUE) 1 else id + 1
+        val pending = RequestInfo(fallback)
+        requests.getOrPut(eventName) { linkedMapOf() }[id] = pending
+        pending.timeout.set(ioScheduler.scheduleDirect({
+            if (onRequestFailed(eventName, id)) {
+                errorEventSubject.onNext(ErrorEvent(WearableFields.ERROR_NO_ACK_EVENT, eventName))
             }
-            return@fromCallable shouldIgnoreResponse
-        }.delaySubscription(timeoutMillis, TimeUnit.MILLISECONDS, ioScheduler)
-            .subscribe { ignore ->
-                if (ignore) {
-                    return@subscribe
-                }
-                errorEventSubject.onNext(
-                    ErrorEvent(WearableFields.ERROR_NO_ACK_EVENT, eventName)
-                )
-            }
-
-        val fallbackAction = Completable.fromAction {
-            if (!onRequestFinished(eventName)) {
-                fallback?.invoke()
-            }
-        }
-        val stateRequests = getStateRequests(eventName)
-        stateRequests.requests.addLast(RequestInfo(fallbackAction, timeoutDisposable))
-        val requestId = if (stateRequests.requests.size > 1) {
-            stateRequests.lastSentRequestId + 1
-        } else {
-            1
-        }
-        stateRequests.lastSentRequestId = requestId
-        Log.d("KEK", "sendEventWithTimeout: $eventName, requestId: $requestId")
-
-        sendEvent(eventName, message, targetNode, requestId)
+        }, timeoutMillis, TimeUnit.MILLISECONDS))
+        sendEvent(eventName, message, targetNode, id)
     }
 
     @SuppressLint("CheckResult")
@@ -97,7 +70,7 @@ class HostDeviceRepository(
             .subscribe(
                 {},
                 { t ->
-                    onRequestFailed(eventName)
+                    if (requestId != null) onRequestFailed(eventName, requestId)
                     errorEventSubject.onNext(ErrorEvent(WearableFields.ERROR_SEND_EVENT, eventName, t))
                 }
             )
@@ -108,42 +81,34 @@ class HostDeviceRepository(
         errorEventSubject.onNext(ErrorEvent(errorType, sentEventName))
     }
 
-    fun onRequestFinished(eventName: String, requestId: Int? = null): Boolean {
-        val stateRequests = getStateRequests(eventName)
-        val requests = stateRequests.requests
-        if (stateRequests.lastSentRequestId == requestId) {
-            while (requests.isNotEmpty()) {
-                requests.removeFirst().timeoutDisposable.dispose()
-            }
-            stateRequests.lastSentRequestId = 0
-            return false
+    @Synchronized fun onRequestFinished(eventName: String, requestId: Int? = null): Boolean {
+        // The phone can publish state changes without any outstanding watch request.
+        val pending = requests[eventName] ?: return false
+        val id = requestId ?: pending.keys.first()
+        val newerOutstanding = pending.keys.last() != id
+        val item = pending.remove(id) ?: return true
+        item.timeout.dispose()
+        if (!newerOutstanding && requestId != null) {
+            pending.values.forEach { it.timeout.dispose() }
+            pending.clear()
         }
-        val shouldIgnoreResponse = requests.size > 1
-        val firstRequest = requests.peekFirst() ?: return shouldIgnoreResponse
-        firstRequest.timeoutDisposable.dispose()
-        requests.removeFirst()
-        return shouldIgnoreResponse
+        if (pending.isEmpty()) requests.remove(eventName)
+        return newerOutstanding
     }
 
-    fun hasActiveRequest(evenName: String): Boolean {
-        return requests.containsKey(evenName)
-    }
+    @Synchronized fun hasActiveRequest(eventName: String) = requests.containsKey(eventName)
 
     fun getErrorEventsObservable(): Observable<ErrorEvent> = errorEventSubject
 
-    private fun onRequestFailed(eventName: String) {
-        val requests = getRequests(eventName)
-        val firstRequest = requests.peekFirst() ?: return
-        firstRequest.fallback.subscribe()//list will be reduced here
-        firstRequest.timeoutDisposable.dispose()
-    }
-
-    private fun getRequests(eventName: String): LinkedList<RequestInfo> {
-        return getStateRequests(eventName).requests
-    }
-
-    private fun getStateRequests(eventName: String): StateRequests {
-        return requests.getOrPut(eventName, ::StateRequests)
+    @Synchronized private fun onRequestFailed(eventName: String, requestId: Int? = null): Boolean {
+        val pending = requests[eventName] ?: return false
+        val id = requestId ?: pending.keys.first()
+        val item = pending.remove(id) ?: return false
+        item.timeout.dispose()
+        if (pending.isNotEmpty()) return false
+        requests.remove(eventName)
+        item.fallback?.invoke()
+        return true
     }
 
     private fun toDeviceState(isAvailable: Boolean): DeviceState {
@@ -153,11 +118,8 @@ class HostDeviceRepository(
         return DeviceState.CONNECTED
     }
 
-    private class StateRequests {
-        var lastSentRequestId = 0
-        val requests = LinkedList<RequestInfo>()
+    private class RequestInfo(val fallback: (() -> Unit)?) {
+        val timeout = SerialDisposable()
     }
-
-    private class RequestInfo(val fallback: Completable, val timeoutDisposable: Disposable)
 
 }

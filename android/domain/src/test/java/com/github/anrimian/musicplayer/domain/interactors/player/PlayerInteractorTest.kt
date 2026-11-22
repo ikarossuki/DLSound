@@ -100,6 +100,49 @@ class PlayerInteractorTest {
     }
 
     @Test
+    fun `three passes seek twice and then continue`() {
+        playerInteractor.prepareToPlay(testSource, 0)
+        playerInteractor.listenFrom(1000, 2000, 3)
+        repeat(3) {
+            positionSubject.onNext(1200)
+            positionSubject.onNext(2000)
+        }
+        verify(musicPlayerController, times(3)).seekTo(1000)
+        playerInteractor.observeListeningRange().test().assertValue(Opt())
+        positionSubject.onNext(2100)
+        positionSubscriber.assertValueAt(positionSubscriber.values().size - 1, 2100L)
+    }
+
+    @Test
+    fun `infinite range handles end of file and seeking outside cancels it`() {
+        playerInteractor.prepareToPlay(testSource, 0)
+        playerInteractor.listenFrom(800, 3000, 0)
+        playerEventSubject.onNext(MediaPlayerEvent.Finished)
+        verify(musicPlayerController, times(2)).seekTo(800)
+        playerInteractor.onSeekFinished(0)
+        playerInteractor.observeListeningRange().test().assertValue(Opt())
+        playerEventSubject.onNext(MediaPlayerEvent.Finished)
+        playerEventsSubscriber.assertValueAt(1) { it is PlayerEvent.FinishedEvent && it.source == testSource }
+    }
+
+    @Test
+    fun `saved clip pauses at B after its final pass`() {
+        playerInteractor.prepareToPlay(testSource, 0)
+        playerInteractor.listenFrom(150, 500, 1, pauseAtEnd = true)
+        positionSubject.onNext(507)
+        playerStateSubscriber.assertValueAt(playerStateSubscriber.values().size - 1, PlayerState.PAUSE)
+        verify(musicPlayerController).seekTo(500)
+    }
+
+    @Test
+    fun `prepare another song clears active range`() {
+        playerInteractor.prepareToPlay(testSource, 0)
+        playerInteractor.listenFrom(100, 200, 5)
+        playerInteractor.prepareToPlay(mock(), 0)
+        playerInteractor.observeListeningRange().test().assertValue(Opt())
+    }
+
+    @Test
     fun `prepare to play in pause state`() {
         val startPosition = 0L
         playerInteractor.prepareToPlay(testSource, startPosition)

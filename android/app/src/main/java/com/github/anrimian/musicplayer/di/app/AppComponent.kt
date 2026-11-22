@@ -103,6 +103,8 @@ interface AppComponent {
     fun shareComponent(module: ShareModule): ShareComponent
     fun orderComponent(orderModule: OrderModule): OrderComponent
 
+    fun playerCoordinator(): com.github.anrimian.musicplayer.domain.interactors.player.PlayerCoordinatorInteractor
+
     fun libraryPlayerInteractor(): LibraryPlayerInteractor
     fun libraryRepository(): com.github.anrimian.musicplayer.domain.repositories.LibraryRepository
     fun playlistsInteractor(): com.github.anrimian.musicplayer.domain.interactors.playlists.PlaylistsInteractor

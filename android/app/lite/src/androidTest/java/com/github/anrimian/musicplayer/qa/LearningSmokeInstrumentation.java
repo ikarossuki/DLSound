@@ -35,6 +35,12 @@ public class LearningSmokeInstrumentation extends Instrumentation {
     public void onStart() {
         Bundle result = new Bundle();
         try {
+            if ("review".equals(arguments.getString("phase"))) {
+                String summary = ReviewRegression.run(this);
+                result.putString("stream", summary);
+                finish(Activity.RESULT_OK, result);
+                return;
+            }
             Intent launch = getTargetContext().getPackageManager()
                     .getLaunchIntentForPackage(getTargetContext().getPackageName());
             if (launch == null) throw new AssertionError("Learning launcher missing");

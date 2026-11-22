@@ -112,7 +112,6 @@ class SystemAudioCatalogProvider(
         }
         val query = queryBuilder.toTypedArray()
 
-        // check how it works
         val uris = getStorageUris()
         if (uris.isEmpty()) {
             return null
@@ -152,7 +151,7 @@ class SystemAudioCatalogProvider(
 
         val compositions = HashMap<AudioFileKey, StorageAudioFile>()
         for (uri in uris) {
-            query(uri, query, selection, projection.toTypedArray(), null)?.use { cursor ->
+            (query(uri, query, selection, projection.toTypedArray(), null) ?: return null).use { cursor ->
                 val cursorWrapper = CursorWrapper(cursor)
 
                 val artistIndex = cursor.getColumnIndex(Media.ARTIST)

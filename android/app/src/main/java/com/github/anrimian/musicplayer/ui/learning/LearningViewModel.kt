@@ -298,7 +298,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
     fun mode(mode: SubtitleMode) { store.mode = mode; mutable.update { it.copy(mode = mode) } }
     fun furigana(enabled: Boolean) {
         store.furigana = enabled
-        mutable.update { it.copy(furigana = enabled) }
+        mutable.update { it.copy(furigana = enabled, readingFailed = false) }
         if (enabled) ensureAutomaticReadings()
     }
     fun font(delta: Int) { store.fontSize = store.fontSize + delta; mutable.update { it.copy(fontSize = store.fontSize) } }
@@ -310,23 +310,24 @@ internal class LearningViewModel(application: Application, private val libraryMo
             val target = store.manualFile(forTrack)
             val staged = runCatching {
                 val raw = files.text(uri.toString())
-                decodeManualSubtitle(raw)
+                val document = decodeManualSubtitle(raw)
                 val temp = File.createTempFile("import-", ".tmp", target.parentFile)
                 try {
                     temp.writeText(raw, Charsets.UTF_8)
-                    temp
+                    temp to document
                 } catch (e: Exception) {
                     temp.delete()
                     throw e
                 }
             }
             main.post {
-                val temp = staged.getOrNull()
+                val temp = staged.getOrNull()?.first
                 try {
                     if (cleared || manualSelections[forTrack] != selection) return@post
-                    check(staged.getOrThrow().renameTo(target))
+                    val (file, document) = staged.getOrThrow()
+                    check(file.renameTo(target))
                     store.setManualUri(forTrack, uri.toString())
-                    if (mutable.value.track?.uri == forTrack) loadSubtitle(forTrack, if (libraryMode) libraryFolder else store.trackFolder)
+                    if (mutable.value.track?.uri == forTrack) loadSubtitle(forTrack, null, document)
                     else notice(R.string.himitsu_subtitle_saved)
                 } catch (e: Exception) {
                     notice(subtitleError(e))
@@ -354,7 +355,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
         loadSubtitle(track.uri, if (libraryMode) libraryFolder else store.trackFolder)
     }
 
-    private fun loadSubtitle(trackUri: String, folder: String?) {
+    private fun loadSubtitle(trackUri: String, folder: String?, validated: SubtitleDocument? = null) {
         val request = generation.incrementAndGet()
         automatic = emptyMap()
         automaticReady = false
@@ -364,7 +365,8 @@ internal class LearningViewModel(application: Application, private val libraryMo
             val result = runCatching {
                 val manualUri = store.manualUri(trackUri)
                 val manual = store.manualFile(trackUri)
-                if (manualUri != null && manual.isFile) {
+                if (validated != null) Triple(validated, R.string.himitsu_subtitle_manual, "")
+                else if (manualUri != null && manual.isFile) {
                     val refreshed = runCatching {
                         val raw = files.text(manualUri)
                         raw to decodeManualSubtitle(raw)
@@ -413,34 +415,47 @@ internal class LearningViewModel(application: Application, private val libraryMo
         }
     }
 
+    private val renderGeneration = java.util.concurrent.atomic.AtomicInteger()
+
     private fun renderReadings() {
         val document = mutable.value.document ?: return
         val track = mutable.value.track?.uri ?: return
-        val rendered = document.cues.map { cue -> RenderedCue(cue,
-            ReadingEngine.render(cue, automatic[cue.id].orEmpty()) { store.correction(track, document, cue, it) }) }
-        mutable.update { it.copy(rendered = rendered, revision = it.revision + 1) }
+        val request = generation.get()
+        val revision = renderGeneration.incrementAndGet()
+        val readings = automatic
+        worker.execute {
+            val correction = store.correctionsFor(track, document)
+            val rendered = document.cues.map { cue ->
+                if (cleared || generation.get() != request || renderGeneration.get() != revision) return@execute
+                RenderedCue(cue, ReadingEngine.render(cue, readings[cue.id].orEmpty()) { correction(cue, it) })
+            }
+            main.post {
+                if (!cleared && generation.get() == request && renderGeneration.get() == revision && mutable.value.track?.uri == track)
+                    mutable.update { it.copy(rendered = rendered, revision = it.revision + 1) }
+            }
+        }
     }
 
     private fun ensureAutomaticReadings() {
         val snapshot = mutable.value
         val document = snapshot.document ?: return
         if (!snapshot.furigana || snapshot.readingBusy || automaticReady || snapshot.readingFailed) return
-        val required = document.cues.filter { cue -> cue.kind == CueKind.DIALOGUE && cue.allowAutomaticReading &&
-            cue.japanese.any { it.reading == null && containsKanji(it.text) } }
-        if (required.isEmpty()) { automaticReady = true; return }
         val request = generation.get()
         mutable.update { it.copy(readingBusy = true) }
         worker.execute {
             val result = try {
-                Result.success(readingCache(document, required, request))
+                val required = document.cues.filter { cue -> cue.kind == CueKind.DIALOGUE && cue.allowAutomaticReading &&
+                    cue.japanese.any { it.reading == null && containsKanji(it.text) } }
+                Result.success(if (required.isEmpty()) emptyMap() else readingCache(document, required, request))
             } catch (error: Exception) { Result.failure(error) }
             catch (error: LinkageError) { Result.failure(error) }
             catch (error: OutOfMemoryError) { Result.failure(error) }
             main.post {
                 if (cleared || generation.get() != request) return@post
+                result.onFailure { android.util.Log.w("HimitsuReading", "Offline reading generation failed", it) }
                 result.onSuccess { automatic = it; automaticReady = true }
                 mutable.update { it.copy(readingBusy = false, readingFailed = result.isFailure) }
-                renderReadings()
+                if (automatic.isNotEmpty()) renderReadings()
             }
         }
     }
@@ -480,10 +495,10 @@ internal class LearningViewModel(application: Application, private val libraryMo
         return result
     }
 
-    fun correct(fingerprint: String, cueId: String, index: Int, reading: String?, expected: ReadingPiece? = null) {
+    fun correct(trackUri: String, fingerprint: String, cueId: String, index: Int, reading: String?, expected: ReadingPiece? = null) {
         val document = mutable.value.document ?: return
         val track = mutable.value.track?.uri ?: return
-        if (document.fingerprint != fingerprint) return
+        if (track != trackUri || document.fingerprint != fingerprint) return
         val rendered = mutable.value.rendered.firstOrNull { it.cue.id == cueId } ?: return
         val piece = rendered.pieces.getOrNull(index) ?: return
         if (expected != null && (expected.start != piece.start || expected.text != piece.text)) return

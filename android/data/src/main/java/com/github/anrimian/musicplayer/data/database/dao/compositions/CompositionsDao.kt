@@ -26,7 +26,7 @@ import com.github.anrimian.musicplayer.domain.models.composition.LocalFileStatus
 import io.reactivex.rxjava3.core.Observable
 import io.reactivex.rxjava3.core.Single
 
-data class LibraryPlaylistRow(val listId: Long, val name: String, val audioId: Long?)
+data class LibraryPlaylistRow(val listId: Long, val name: String, val audioId: Long?, val entryId: Long?)
 
 data class LibraryFileLocation(val id: Long, val folder: String, val fileName: String, val albumId: Long?, val albumArtist: String?, val trackNumber: Long?, val discNumber: Long?)
 
@@ -43,7 +43,7 @@ interface CompositionsDao {
     WHERE c.storageId IS NOT NULL""")
     fun getLibraryFileLocations(): List<LibraryFileLocation>
 
-    @Query("""SELECT l.id AS listId, l.name, e.audioId FROM play_lists l
+    @Query("""SELECT l.id AS listId, l.name, e.audioId, e.itemId AS entryId FROM play_lists l
         LEFT JOIN play_lists_entries e ON e.playListId = l.id
         ORDER BY l.modifiedTime DESC, l.id, e.orderPosition, e.itemId""")
     fun observeLibraryPlaylistRows(): io.reactivex.rxjava3.core.Observable<List<LibraryPlaylistRow>>

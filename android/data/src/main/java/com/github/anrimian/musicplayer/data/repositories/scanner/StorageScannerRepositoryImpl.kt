@@ -42,14 +42,14 @@ class StorageScannerRepositoryImpl(
 ) : StorageScannerRepository {
 
     private val refreshGeneration = AtomicLong()
-    private data class Scan(val generation: Long, val result: StorageAnalyzeResult)
+    private data class Scan(val generation: Long, val result: Result<StorageAnalyzeResult>)
 
     private val rescanStorageSubject = BehaviorSubject.createDefault(Constants.TRIGGER)
 
     private val internalStorageChangesObservable by lazy { createStorageChangesObservable().share() }
 
     override fun getStorageChangesObservable(): Observable<StorageAnalyzeResult> {
-        return internalStorageChangesObservable.map(Scan::result).onErrorResumeNext(::handleScanError)
+        return internalStorageChangesObservable.filter { it.result.isSuccess }.map { it.result.getOrThrow() }.onErrorResumeNext(::handleScanError)
     }
 
     override fun rescanStorage() {
@@ -62,7 +62,7 @@ class StorageScannerRepositoryImpl(
             val subscription = internalStorageChangesObservable
                 .filter { it.generation >= requested }
                 .firstOrError()
-                .subscribe({ completion.onComplete() }, { completion.tryOnError(it) })
+                .subscribe({ scan -> scan.result.fold({ completion.onComplete() }, { completion.tryOnError(it) }) }, { completion.tryOnError(it) })
             completion.setDisposable(subscription)
             if (!completion.isDisposed) rescanStorage()
         }
@@ -105,9 +105,14 @@ class StorageScannerRepositoryImpl(
                 .throttleLatest(500, TimeUnit.MILLISECONDS, true)
                 .map {
                     val generation = refreshGeneration.get()
-                    val result = fetchAndAnalyzeFiles(!isPlaylistScanPerformed)
-                    isPlaylistScanPerformed = true
-                    Scan(generation, result)
+                    try {
+                        val result = fetchAndAnalyzeFiles(!isPlaylistScanPerformed)
+                        isPlaylistScanPerformed = true
+                        Scan(generation, Result.success(result))
+                    } catch (error: ContentResolverQueryException) {
+                        // A later mount or refresh must still reach the observer.
+                        Scan(generation, Result.failure(error))
+                    }
                 }
                 .retry(RETRY_COUNT, ::isStandardError)
                 .subscribeOn(scheduler)
@@ -118,11 +123,8 @@ class StorageScannerRepositoryImpl(
         val minDuration = settingsRepository.getAudioFileMinDurationMillis()
         val showAll = settingsRepository.isShowAllAudioFilesEnabled()
         val allowedExtensions = settingsRepository.getAllowedFileExtensions()
-        val allFiles = HashMap<AudioFileKey, StorageAudioFile>()
-        allFiles.putAll(
-            audioCatalogProvider.getAudioFiles(minDuration, showAll, allowedExtensions) ?: emptyMap()
-        )
-        // add other storages later
+        val allFiles = audioCatalogProvider.getAudioFiles(minDuration, showAll, allowedExtensions)
+            ?: throw ContentResolverQueryException(java.io.IOException("音乐存储卷读取失败，请稍后刷新"))
         return onStorageFilesReceived(allFiles, scanPlaylists)
     }
 

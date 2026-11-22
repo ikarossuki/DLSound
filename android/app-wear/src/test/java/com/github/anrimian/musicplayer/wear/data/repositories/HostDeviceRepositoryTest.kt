@@ -28,6 +28,17 @@ class HostDeviceRepositoryTest {
         2000
     )
 
+    @Test fun `active request flag follows acknowledgements and timeout`() {
+        assertFalse(deviceRepository.onRequestFinished(eventName))
+        deviceRepository.sendEventWithTimeout(eventName, fallback = null)
+        assertEquals(true, deviceRepository.hasActiveRequest(eventName))
+        deviceRepository.onRequestFinished(eventName)
+        assertFalse(deviceRepository.hasActiveRequest(eventName))
+        deviceRepository.sendEventWithTimeout(eventName, fallback = null)
+        scheduler.advanceTimeBy(3, TimeUnit.SECONDS)
+        assertFalse(deviceRepository.hasActiveRequest(eventName))
+    }
+
     private val errorObserver = deviceRepository.getErrorEventsObservable().test()
 
     private val eventName = "test event"

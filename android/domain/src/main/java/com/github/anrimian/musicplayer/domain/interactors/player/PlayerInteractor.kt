@@ -47,6 +47,40 @@ class PlayerInteractor(
     private var currentSource: CompositionSource? = null
     private val currentSourceSubject = BehaviorSubject.create<Opt<CompositionSource>>()//add default null value and check all behaviour
 
+    data class ListeningRange(val start: Long, val end: Long, val passes: Int, val pauseAtEnd: Boolean)
+    private val listeningRange = BehaviorSubject.createDefault<Opt<ListeningRange>>(Opt())
+    fun observeListeningRange(): Observable<Opt<ListeningRange>> = listeningRange.hide()
+
+    fun clearListeningRange() {
+        if (listeningRange.value?.value != null) listeningRange.onNext(Opt())
+    }
+
+    fun listenFrom(start: Long, end: Long?, passes: Int, pauseAtEnd: Boolean = false) {
+        require(start >= 0 && (end == null || end > start) && passes in 0..99)
+        listeningRange.onNext(Opt(end?.let { ListeningRange(start, it, passes, pauseAtEnd) }))
+        seekTo(start)
+        trackPositionChangeSubject.onNext(start)
+        play()
+    }
+
+    private fun repeatRangeAt(position: Long): Boolean {
+        val range = listeningRange.value?.value ?: return false
+        if (position < range.end) return false
+        if (range.passes == 1) {
+            clearListeningRange()
+            if (range.pauseAtEnd) {
+                pause()
+                seekTo(range.end)
+                return true
+            }
+            return false
+        }
+        if (range.passes > 1) listeningRange.onNext(Opt(range.copy(passes = range.passes - 1)))
+        seekTo(range.start)
+        trackPositionChangeSubject.onNext(range.start)
+        return true
+    }
+
     private var currentPosition = 0L
     private val trackPositionSubject = BehaviorSubject.create<Long>()
     private val trackPositionChangeSubject = PublishSubject.create<Long>()
@@ -68,6 +102,7 @@ class PlayerInteractor(
     private var rePrepareCount = 0
 
     fun prepareToPlay(compositionSource: CompositionSource, startPosition: Long) {
+        clearListeningRange()
         rePrepareCount = 0
 
         this.currentSource = compositionSource
@@ -84,6 +119,7 @@ class PlayerInteractor(
     }
 
     fun reset() {
+        clearListeningRange()
         stopTracingTrackPosition()
         eventsDisposable.clear()
         RxUtils.dispose(preparationDisposable)
@@ -154,6 +190,7 @@ class PlayerInteractor(
     }
 
     fun stop() {
+        clearListeningRange()
         systemServiceController.stopMusicService(true)
         playAfterPrepare = false
         musicPlayerController.stop()
@@ -185,6 +222,7 @@ class PlayerInteractor(
     }
 
     fun error(throwable: Throwable) {
+        clearListeningRange()
         systemServiceController.stopMusicService()
         musicPlayerController.seekTo(0)
         pauseInternal()
@@ -199,6 +237,7 @@ class PlayerInteractor(
     }
 
     fun onSeekFinished(position: Long) {
+        cancelRangeOutside(position)
         if (!isPreparing) {
             musicPlayerController.seekTo(position)
         }
@@ -402,7 +441,10 @@ class PlayerInteractor(
     private fun onPlayerEventReceived(event: MediaPlayerEvent) {
         val currentSource = currentSource ?: return
         when(event) {
-            MediaPlayerEvent.Finished -> playerEventsSubject.onNext(PlayerEvent.FinishedEvent(currentSource))
+            MediaPlayerEvent.Finished -> {
+                if (!repeatRangeAt(Long.MAX_VALUE)) playerEventsSubject.onNext(PlayerEvent.FinishedEvent(currentSource))
+                else if (isPlaying()) resumeInternal()
+            }
             is MediaPlayerEvent.Error -> onPlayerErrorEventReceived(event.throwable, currentSource)
         }
     }
@@ -450,6 +492,11 @@ class PlayerInteractor(
         }
     }
 
+    private fun cancelRangeOutside(position: Long) {
+        val range = listeningRange.value?.value ?: return
+        if (position < range.start || position >= range.end) clearListeningRange()
+    }
+
     private fun seekBy(millis: Long): Single<Long> {
         return Single.zip(getTrackPosition(), getDuration()) { position, duration ->
 //            if (position == -1L) {
@@ -459,6 +506,7 @@ class PlayerInteractor(
             if (targetPosition > duration && duration != -1L) {
                 return@zip position
             }
+            cancelRangeOutside(targetPosition)
             seekTo(targetPosition)
             trackPositionChangeSubject.onNext(targetPosition)
             return@zip targetPosition
@@ -493,7 +541,7 @@ class PlayerInteractor(
         stopTracingTrackPosition()
         trackPositionDisposable = musicPlayerController.getTrackPositionObservable()
             .doOnSubscribe { trackPositionSubject.onNext(currentPosition) }
-            .subscribe(this::updateCurrentPosition)
+            .subscribe { position -> if (!repeatRangeAt(position)) updateCurrentPosition(position) }
     }
 
     private fun stopTracingTrackPosition() {

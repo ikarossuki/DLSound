@@ -41,8 +41,15 @@ class PlayQueueInteractor(
         updateTime: Long,
         updateMessage: ArrayList<ListUpdateCommand<PlayQueueItem>>
     ) {
-        lastUpdateTime = updateTime
-        ListUpdateUtil.applyDiff(ArrayList(playQueueSubject.value!!), updateMessage)
+        val updated = ArrayList(playQueueSubject.value!!)
+        try {
+            ListUpdateUtil.applyDiff(updated, updateMessage)
+        } catch (invalid: IndexOutOfBoundsException) {
+            lastUpdateTime = 0L
+            startObserveQueue()
+            return
+        }
+        onPlayQueueReceived(updateTime, updated)
     }
 
     fun getPlayQueueObservable(): Observable<ArrayList<PlayQueueItem>> = playQueueSubject

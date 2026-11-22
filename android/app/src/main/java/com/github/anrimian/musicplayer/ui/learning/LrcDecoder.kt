@@ -25,7 +25,7 @@ internal object LrcDecoder {
                     val fraction = match.groupValues[3].padEnd(3, '0').ifEmpty { "0" }.toLong()
                     val total = Math.addExact(Math.addExact(Math.multiplyExact(minutes, 60_000L), seconds * 1_000), fraction)
                     require(total <= 9_007_199_254_740_991L)
-                    Math.subtractExact(total, offsetMs).coerceAtLeast(0)
+                    Math.subtractExact(total, offsetMs).coerceAtLeast(0).also { require(it <= 9_007_199_254_740_991L) }
                 }.getOrNull()
                 if (millis == null) break
                 times += millis

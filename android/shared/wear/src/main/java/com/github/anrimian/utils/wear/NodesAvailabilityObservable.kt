@@ -22,7 +22,7 @@ class NodesAvailabilityObservable(
 
     fun getObservable(): Observable<Set<Node>> {
         return RxUtils.withDefaultValue(availableNodesSubject) { getAvailableNodes() }
-            .distinctUntilChanged { nodes -> nodes.size }
+            .distinctUntilChanged { nodes -> nodes.map { it.id }.toSet() }
     }
 
     fun onCapabilityChanged(info: CapabilityInfo) {

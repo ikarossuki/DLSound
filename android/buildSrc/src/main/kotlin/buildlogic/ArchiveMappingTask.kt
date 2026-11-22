@@ -76,8 +76,8 @@ abstract class ArchiveMappingTask : DefaultTask() {
         val appDir = File(archiveRepoDir.get().asFile, appName.get())
 
         val skipReason = versionBumpSkipReason()
-        if (skipReason != null && !force.get()) {
-            reportSkip(skipReason, appDir, baseName, mapping)
+        if (!force.get() && (skipReason != null || File(appDir, "$baseName.map.gz").exists())) {
+            reportSkip(skipReason ?: "An archive already exists for this version", appDir, baseName, mapping)
             return
         }
 
@@ -100,7 +100,8 @@ abstract class ArchiveMappingTask : DefaultTask() {
             ?: return "$constantName not found in ${constantsFile.name}"
 
         val sourceRepo = sourceRepoDir.get().asFile
-        val relativePath = constantsFile.relativeTo(sourceRepo).invariantSeparatorsPath
+        val prefix = git(sourceRepo, "rev-parse", "--show-prefix")?.trim() ?: return "Cannot resolve source repository"
+        val relativePath = prefix + constantsFile.relativeTo(sourceRepo).invariantSeparatorsPath
         val committedText = git(sourceRepo, "show", "HEAD:$relativePath")
             ?: return null // no git history to compare against — archive to be safe
         val committedValue = readVersionCode(committedText, constantName) ?: return null

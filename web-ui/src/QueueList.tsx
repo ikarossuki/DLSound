@@ -65,7 +65,6 @@ export function QueueList({queue,current,jump,move,remove}:Props) {
       event.preventDefault();
       const touch=Array.from(event.touches).find(t=>t.identifier===finger);
       if(!touch || event.touches.length!==1){reset();return;}
-      event.preventDefault();
       if(dragging){y=touch.clientY;return;}
       if(!scrolling && Math.hypot(touch.clientX-startX,touch.clientY-startY)<=8)return;
       window.clearTimeout(timer);scrolling=true;

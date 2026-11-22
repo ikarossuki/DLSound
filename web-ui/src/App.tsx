@@ -18,6 +18,8 @@ import {cn} from '@/lib/utils';
 import {usePlayer,usePlaybackTime,type Track} from './usePlayer';
 import {indexLibrary,librarySelection} from './libraryIndex';
 import {indexDirectories,nearestDirectory} from './directoryIndex';
+import {ListeningTools,MarkList,listen,sourceKey,useRecords,type Mark} from './ListeningTools';
+import {WorksLibrary} from './WorksLibrary';
 import {ProfileContent,titles} from './ProfileContent';
 import {QueueList} from './QueueList';
 import {WindowedRows} from './WindowedRows';
@@ -58,8 +60,18 @@ export default function App(){
  const closeSettings=()=>setSettingsPath(path=>path.slice(0,-1));
  const p=usePlayer(expanded || settingsPage==='track');
  const [panel,setPanel]=useState(''),[actionTrack,setActionTrack]=useState<Track|null>(null),[follow,setFollow]=useState(true);
+ const savedMarks=useRecords<Mark>('bookmarks');
+ const currentKey=sourceKey(p.track);
+ const [draft,setDraft]=useState<{source:string;start:number;end?:number}|null>(null);
+ const thisDraft=draft?.source===currentKey?draft:null;
+ async function openMark(m:Mark){
+   const target=currentKey===m.source?p.track:p.tracks.find((t:Track)=>sourceKey(t)===m.source);
+   if(!target){toast.error('请重新打开原音频，再从「本曲书签」播放');return;}
+   try{await listen(target.id,m.start,m.end,1,true,true);setSettingsPath([]);setExpanded(true);}
+   catch(e){toast.error((e as Error).message);}
+ }
  const favorites:string[]=p.favorites;
- const playlists:{id:string;name:string;trackIds:string[]}[]=p.playlists;
+ const playlists:{id:string;name:string;trackIds:string[];entryIds:string[]}[]=p.playlists;
  const library=useMemo(()=>indexLibrary(p.tracks),[p.tracks]);
  const [browser,setBrowser]=useState(readFolderBrowser);
  useEffect(()=>{if(p.browserRevision)setBrowser(readFolderBrowser());},[p.browserRevision]);
@@ -96,7 +108,7 @@ export default function App(){
  const openSettings=(page='playback')=>{setPanel('');setSettingsPath(path=>path.at(-1)===page?path:[...path,page]);};
  const offset=p.offset;
  const openPlayer=()=>{setPage('cover');setExpanded(true);};
- const playTrack=(track:Track)=>{p.select(track,true,listed);setPage('cover');setExpanded(true);setFollow(true);};
+ const playTrack=(track:Track,index?:number)=>{p.select(track,true,listed,index);setPage('cover');setExpanded(true);setFollow(true);};
  useEffect(()=>{setFollow(true);},[p.item?.itemId]);
  useEffect(()=>{const escape=(e:KeyboardEvent)=>{if(e.key==='Escape'&&!e.defaultPrevented&&!panel){if(settingsPage)closeSettings();else if(expanded)setExpanded(false);};};window.addEventListener('keydown',escape);return()=>window.removeEventListener('keydown',escape);},[panel,expanded,settingsPage]);
  // This ref keeps the browser back handler in sync without multiplying history entries.
@@ -105,19 +117,20 @@ export default function App(){
  const visibleCues=p.cues;
  const lookup=useMemo(()=>indexTimeline(visibleCues),[visibleCues]);
  const active=lookup(subtitleTime(p.time,offset)),dialogues=useMemo(()=>visibleCues.filter((c:any)=>c.kind==='dialogue'),[visibleCues]),activeDialogue=active.filter((c:any)=>c.kind==='dialogue');
- const activeKey=activeDialogue.map((c:any)=>c.key).join('|');
  const favorite=(id:string)=>p.favorite(id);
- const selectedList=playlists.find(l=>l.id===folder);
+ const selectedList=section==='playlists'&&!query?playlists.find(l=>l.id===folder):undefined;
+ const entryIds=useMemo(()=>selectedList?.entryIds.filter((_,i)=>library.byId.has(selectedList.trackIds[i])),[selectedList,library]);
+ const [actionEntry,setActionEntry]=useState('');
  const listed=useMemo(()=>browsingTree ? directory.tracks
    : librarySelection(library,section,folder,query,favorites,selectedList?.trackIds),
    [browsingTree,directory,library,section,folder,query,favorites,selectedList]);
  const title=tree?(directory.path?directory.name:'文件夹'):section==='folders'?(library.folders.get(folder)?.name||'文件夹'):section==='albums'?(library.albums.get(folder)?.[0].album||'专辑'):folder==='favorites'?'我的收藏':selectedList?.name||'歌单';
- function TrackRow({track,index=0}:{track:Track;index?:number}){return <div className="track-row"><button className="track-main" onClick={()=>playTrack(track)}><span className="track-number">{p.track?.id===track.id?<Volume2 className="playing-mark"/>:index+1}</span><span className="track-copy"><strong className={p.track?.id===track.id?'is-current':''}>{track.title}</strong><small>{track.artist} · {formatTime(p.track?.id===track.id?p.duration:track.duration)}</small></span></button><IconButton label={'更多操作：'+track.title} icon={MoreHorizontal} onClick={()=>{setActionTrack(track);openPanel('track');}}/></div>;}
- const trackRows=<WindowedRows items={listed} keyOf={t=>t.id} estimate={54*p.fontScale} scrollSelector=".library-scroll" render={(track,index)=>TrackRow({track,index})}/>;
+ function TrackRow({track,index=0}:{track:Track;index?:number}){return <div className="track-row"><button className="track-main" onClick={()=>playTrack(track,index)}><span className="track-number">{p.track?.id===track.id?<Volume2 className="playing-mark"/>:index+1}</span><span className="track-copy"><strong className={p.track?.id===track.id?'is-current':''}>{track.title}</strong><small>{track.artist} · {formatTime(p.track?.id===track.id?p.duration:track.duration)}</small></span></button><IconButton label={'更多操作：'+track.title} icon={MoreHorizontal} onClick={()=>{setActionTrack(track);setActionEntry(entryIds?.[index]||'');openPanel('track');}}/></div>;}
+ const trackRows=<WindowedRows items={listed} keyOf={(t,i)=>entryIds?.[i]??t.id} estimate={54*p.fontScale} scrollSelector=".library-scroll" render={(track,index)=>TrackRow({track,index})}/>;
  function Japanese({cue}:{cue:any}){return <>{(cue.ja||[]).map((t:any,i:number)=>t.reading&&p.prefs.ruby?<ruby key={i}>{t.text}<rt aria-hidden="true">{t.reading}</rt></ruby>:<span key={i}>{t.text}</span>)}</>;}
  useEffect(()=>{document.querySelector(".library-scroll")?.scrollTo(0,0);},[query,folder,section]);
  const subtitleUnavailable=p.subtitleError||!dialogues.length;
- const panelTitle:Record<string,string>={deletePlaylist:'删除歌单',clearQueue:'清空播放队列',settings:'播放与显示',speed:'播放速度',repeat:'播放顺序',sleep:'睡眠定时',theme:'外观',font:'字幕字号',rubySize:'读音大小',offset:'字幕偏移',menu:'更多',queue:'播放队列',language:'歌词语言',track:actionTrack?.title||'音轨操作',correction:'修正当前句读音',permissions:'文件访问',playlist:editingList?'重命名歌单':'创建歌单',addPlaylist:'加入歌单'};
+ const panelTitle:Record<string,string>={study:'复听与书签',deletePlaylist:'删除歌单',clearQueue:'清空播放队列',settings:'播放与显示',speed:'播放速度',repeat:'播放顺序',sleep:'睡眠定时',theme:'外观',font:'字幕字号',rubySize:'读音大小',offset:'字幕偏移',menu:'更多',queue:'播放队列',language:'歌词语言',track:actionTrack?.title||'音轨操作',correction:'修正当前句读音',permissions:'文件访问',playlist:editingList?'重命名歌单':'创建歌单',addPlaylist:'加入歌单'};
  const languageNames:Record<string,string>={ja:'日语',zh:'中文',both:'双语'};
  const order=p.prefs.shuffle?'随机播放':p.prefs.repeat==='one'?'单曲循环':p.prefs.repeat==='all'?'列表循环':'顺序播放';
  function openCorrection(){p.correction();}
@@ -129,7 +142,9 @@ export default function App(){
  {settingsPage||(!expanded&&section==='me')?<div className="settings-page"><header className="compact-header">
  {settingsPage&&<IconButton label="返回上一页" icon={ArrowLeft} onClick={closeSettings}/>}<h1>{titles[profilePage]}</h1>
  <IconButton label={dark?'切换浅色':'切换深色'} icon={dark?SunMoon:Moon} onClick={()=>p.pref('theme',dark?'light':'dark')}/></header><div key={profilePage} className="settings-scroll profile-scroll">
- {settingsPage==='playback'?<>
+ {settingsPage==='works'?<WorksLibrary directories={directories} play={(track,collection)=>{p.select(track,true,collection);setSettingsPath([]);setExpanded(true);setPage('cover');}}/>:
+ settingsPage==='marks'?<MarkList marks={savedMarks.rows} remove={key=>savedMarks.update(key)} play={openMark}/>:
+ settingsPage==='playback'?<>
  <SettingRow label="播放速度" value={p.prefs.speed+'×'} icon={Volume2} onClick={()=>openPanel('speed')}/>
  <SettingRow label="播放顺序" value={order} icon={Repeat2} onClick={()=>openPanel('repeat')}/>
  <SettingRow label="睡眠定时" value={p.sleep.mode==='off'?'关闭':p.sleep.mode==='end'?'本首结束':p.sleep.minutes+' 分钟'} icon={Timer} onClick={()=>openPanel('sleep')}/>
@@ -165,6 +180,7 @@ export default function App(){
  {section==='folders'&&!showSearch&&<div className="folder-view" role="group" aria-label="文件夹浏览方式">
    <button aria-pressed={!treeMode} onClick={()=>changeFolderMode(false)}><span>平铺列表</span></button>
    <button aria-pressed={treeMode} onClick={()=>changeFolderMode(true)}><span>按目录浏览</span></button>
+   <button onClick={()=>openSettings('works')}><span>作品库</span></button>
  </div>}
  {browsingTree&&<nav className="directory-crumbs" aria-label="当前路径">{crumbs.map((node,index)=><span key={node.path}>{index>0&&<ChevronRight/>}<button aria-current={node===directory?'location':undefined} onClick={()=>openDirectory(node.path)}>{node.name}</button></span>)}</nav>}
  {!tree&&!folder&&!query&&section==='folders'&&<div className="breadcrumb">本地音乐 <ChevronRight/> 文件夹</div>}
@@ -192,13 +208,14 @@ export default function App(){
  {p.readingBusy&&<Badge variant="secondary">读音生成中</Badge>}{p.readingFailed&&<Button variant="ghost" size="sm" onClick={()=>p.pref('ruby',true)}>自动读音失败，点此重试</Button>}
  </TabsContent>
  </div></Tabs>
- <footer className="transport"><Slider aria-label="播放进度" value={[scrub??p.time]} max={p.duration||1} step={100} disabled={!p.track||!p.duration} onValueChange={([t])=>setScrub(t)} onValueCommit={([t])=>{p.seek(t);setScrub(null);}}/><div className="time-labels"><span>{formatTime(p.time)}</span><span>{p.loading?'加载中':''}</span><span>{formatTime(p.duration)}</span></div>
+ <footer className="transport"><Slider aria-label="播放进度" value={[scrub??p.time]} max={p.duration||1} step={100} disabled={!p.track||!p.duration} onValueChange={([t])=>setScrub(t)} onValueCommit={([t])=>{p.seek(t);setScrub(null);}}/><div className="time-labels"><span>{formatTime(p.time)}</span><button className="study-shortcut" disabled={!p.track||!p.duration} onClick={()=>openPanel('study')}>{p.listenRange?'复听中 · 管理':'复听与书签'}</button><span>{formatTime(p.duration)}</span></div>
  <div className="transport-controls"><IconButton label={order} disabled={p.externalView} icon={p.prefs.shuffle?Shuffle:p.prefs.repeat==='one'?Repeat1:Repeat2} onClick={()=>openPanel('repeat')}/><IconButton label="上一首" icon={SkipBack} disabled={!p.track||p.externalView} onClick={()=>p.skip(-1)}/><Button size="play" aria-label={p.playing?'暂停':'播放'} disabled={!p.track} onClick={p.toggle}>{p.playing?<Pause data-icon="inline-start"/>:<Play data-icon="inline-start"/>}</Button><IconButton label="下一首" icon={SkipForward} disabled={!p.track||p.externalView} onClick={()=>p.skip(1)}/><IconButton label="打开播放队列" icon={ListMusic} disabled={p.externalView} onClick={()=>openPanel('queue')}/></div>
 
  </footer></div>}
  </main>
  <Dialog open={!!panel} onOpenChange={open=>!open&&setPanel('')}><DialogContent className="app-sheet" showCloseButton={false} onEscapeKeyDown={e=>e.stopPropagation()} onCloseAutoFocus={e=>{e.preventDefault();panelTrigger.current?.focus();}}><DialogHeader><div className="sheet-heading"><DialogTitle>{panelTitle[panel]||'设置'}</DialogTitle><DialogClose asChild><IconButton label="关闭面板" icon={X}/></DialogClose></div><DialogDescription className="sr-only">{panel==='queue'?`${p.queue.length} 首音轨`:panelTitle[panel]||'调整选项'}</DialogDescription></DialogHeader>
  <div className="sheet-scroll">
+ {panel==='study'&&<ListeningTools p={p} cue={activeDialogue[0]} offset={offset} marks={savedMarks.rows.filter(m=>m.source===currentKey)} save={m=>savedMarks.update(m.key,m)} remove={key=>savedMarks.update(key)} draft={thisDraft} onDraft={v=>setDraft(v?{...v,source:currentKey}:null)}/>}
  {panel==='menu'&&<div className="action-list"><Button variant="ghost" onClick={()=>openSettings('playback')}><Settings2 data-icon="inline-start"/>播放设置</Button><Button variant="ghost" onClick={()=>openSettings('subtitles')}><Languages data-icon="inline-start"/>字幕与读音</Button><Button variant="ghost" onClick={()=>setPanel('permissions')}>文件访问</Button><Button variant="ghost" onClick={()=>{p.refresh();setPanel('');}}>刷新音乐库</Button></div>}
  {panel==='speed'&&<Choice label="播放速度" value={String(p.prefs.speed)} options={['0.5','0.75','1','1.25','1.5','2'].map(v=>[v,v+'×'])} onChange={v=>p.pref('speed',Number(v))}/>}
  {panel==='repeat'&&<Choice label="播放顺序" value={p.prefs.shuffle?'shuffle':p.prefs.repeat} options={[["off","顺序播放"],["all","列表循环"],["one","单曲循环"],["shuffle","随机播放"]]} onChange={v=>{p.pref('repeat',v==='shuffle'?'all':v);p.pref('shuffle',v==='shuffle');}}/>}
@@ -209,7 +226,7 @@ export default function App(){
  {panel==='offset'&&!p.offsetKey&&<p>当前音轨没有可校准的字幕。</p>}{panel==='offset'&&p.offsetKey&&<FieldGroup><Field><FieldLabel>字幕偏移 · {offset>0?'+':''}{offset} ms</FieldLabel><Slider aria-label="字幕偏移" min={-5000} max={5000} step={100} value={[offset]} onValueChange={([v])=>p.setOffset(v)}/><FieldDescription>正值让字幕晚出现，负值让字幕提前。仅应用于当前音轨和字幕。</FieldDescription></Field><Button variant="outline" onClick={()=>p.setOffset(0)}>重置为 0 ms</Button></FieldGroup>}
  {panel==='language'&&<FieldGroup><Choice label="显示语言" value={p.prefs.language} options={[["ja","日文"],["zh","中文"],["both","日中双语"]]} onChange={v=>p.pref('language',v)}/><Field orientation="horizontal"><FieldLabel htmlFor="lang-ruby">显示假名</FieldLabel><Switch id="lang-ruby" checked={p.prefs.ruby} onCheckedChange={v=>p.pref('ruby',v)}/></Field><Button variant="outline" onClick={()=>openSettings('subtitles')}>更多歌词设置</Button></FieldGroup>}
  {panel==='queue'&&<>{!p.queue.length?<Blank title="队列是空的" description="从音轨的更多操作中添加下一首，或直接播放音轨。"><Button onClick={()=>{setPanel('');setExpanded(false);setSettingsPath([]);setSection('folders');setFolder('');setShowSearch(false);setQuery('');}}>返回曲库</Button></Blank>:<><QueueList queue={p.queue} current={p.item?.itemId} jump={p.jump} move={p.move} remove={p.remove}/><Button variant="outline" onClick={()=>setPanel('clearQueue')}><Trash2 data-icon="inline-start"/>清空播放队列</Button></> }</>}
- {panel==='track'&&actionTrack&&<div className="action-list"><Button variant="ghost" onClick={()=>{playTrack(actionTrack);setPanel('');}}><Play data-icon="inline-start"/>立即播放</Button><Button variant="ghost" onClick={()=>{p.append(actionTrack,true);setPanel('');}}><SkipForward data-icon="inline-start"/>下一首播放</Button><Button variant="ghost" onClick={()=>{p.append(actionTrack);setPanel('');}}><Plus data-icon="inline-start"/>加入播放队列</Button><Button variant="ghost" onClick={()=>favorite(actionTrack.id)}><Heart data-icon="inline-start"/>{favorites.includes(actionTrack.id)?'取消收藏':'收藏音轨'}</Button><Button variant="ghost" onClick={()=>setPanel('addPlaylist')}><ListMusic data-icon="inline-start"/>加入歌单</Button>{selectedList&&<Button variant="ghost" onClick={()=>{p.playlist('remove',{id:selectedList.id,trackId:actionTrack.id}).then(()=>{setPanel('');toast('已从歌单移除，文件保持不变');}).catch((e:Error)=>toast.error(e.message));}}>从当前歌单移除</Button>}</div>}
+ {panel==='track'&&actionTrack&&<div className="action-list"><Button variant="ghost" onClick={()=>{playTrack(actionTrack,entryIds&&actionEntry?entryIds.indexOf(actionEntry):undefined);setPanel('');}}><Play data-icon="inline-start"/>立即播放</Button><Button variant="ghost" onClick={()=>{p.append(actionTrack,true);setPanel('');}}><SkipForward data-icon="inline-start"/>下一首播放</Button><Button variant="ghost" onClick={()=>{p.append(actionTrack);setPanel('');}}><Plus data-icon="inline-start"/>加入播放队列</Button><Button variant="ghost" onClick={()=>favorite(actionTrack.id)}><Heart data-icon="inline-start"/>{favorites.includes(actionTrack.id)?'取消收藏':'收藏音轨'}</Button><Button variant="ghost" onClick={()=>setPanel('addPlaylist')}><ListMusic data-icon="inline-start"/>加入歌单</Button>{selectedList&&<Button variant="ghost" onClick={()=>{p.playlist('remove',{id:selectedList.id,entryId:actionEntry}).then(()=>{setPanel('');toast('已从歌单移除，文件保持不变');}).catch((e:Error)=>toast.error(e.message));}}>从当前歌单移除</Button>}</div>}
  {panel==='clearQueue'&&<FieldGroup><p>清空当前队列中的 {p.queue.length} 首音轨？</p><Button variant="outline" onClick={()=>setPanel('queue')}>取消</Button><Button onClick={()=>p.clear().then(()=>{setPanel('queue');toast('队列已清空');}).catch((e:Error)=>toast.error(e.message))}>确认清空</Button></FieldGroup>}
  {panel==='deletePlaylist'&&selectedList&&<FieldGroup><p>删除「{selectedList.name}」及其中 {selectedList.trackIds.length} 条歌单记录？音频文件会保留。</p><Button variant="outline" onClick={()=>setPanel('playlist')}>取消</Button><Button onClick={()=>{p.playlist('delete',{id:editingList}).then(()=>{setFolder('');setPanel('');toast('歌单已删除，音频文件不变');}).catch((e:Error)=>toast.error(e.message));}}>确认删除</Button></FieldGroup>}
  {panel==='playlist'&&<form onSubmit={e=>{e.preventDefault();const name=listName.trim();if(!name){setFormError('请填写歌单名称。');return;}if(playlists.some(l=>l.name===name&&l.id!==editingList)){setFormError('这个名称已经存在，请换一个。');return;}p.playlist(editingList?'rename':'create',{id:editingList,name}).then(()=>{setPanel('');toast.success(editingList?'歌单已重命名':'歌单已创建');}).catch((e:Error)=>setFormError(e.message));}}><FieldGroup><Field data-invalid={!!formError}><FieldLabel htmlFor="list-name">歌单名称</FieldLabel><Input id="list-name" maxLength={60} value={listName} onChange={e=>setListName(e.target.value)} aria-invalid={!!formError} placeholder="例如：睡前慢听"/>{formError&&<FieldDescription>{formError}</FieldDescription>}</Field><Button type="submit">保存歌单</Button>{editingList&&<Button type="button" variant="outline" onClick={()=>setPanel('deletePlaylist')}>删除歌单</Button>}</FieldGroup></form>}

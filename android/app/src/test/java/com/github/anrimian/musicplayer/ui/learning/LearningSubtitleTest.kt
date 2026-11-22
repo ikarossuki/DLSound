@@ -4,6 +4,12 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class LearningSubtitleTest {
+    @Test fun `offset is bounded after subtraction`() {
+        val max = 9_007_199_254_740_991L
+        assertEquals(max, LrcDecoder.decode("[offset:-$max]\n[00:00.00]人").cues.single().startMs)
+        assertTrue(LrcDecoder.decode("[offset:-$max]\n[00:00.001]人").cues.isEmpty())
+    }
+
     @Test fun `minute values beyond 59 and BOM are supported`() {
         val cue = LrcDecoder.decode("\uFEFF[123:04.250]人間　｜　人类").cues.single()
         assertEquals(7_384_250L, cue.startMs)

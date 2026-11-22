@@ -6,7 +6,7 @@ import kuromoji from '../../licenses/kuromoji/LICENSE.md?raw';
 import ipadic from '../../licenses/kuromoji/NOTICE.md?raw';
 import ui from '../THIRD_PARTY_NOTICES.md?raw';
 import logo from './dl-sound.svg';
-export const titles:Record<string,string>={me:'我的',settings:'设置',about:'关于',playback:'播放',subtitles:'字幕与读音',appearance:'外观',files:'文件与曲库',track:'音轨字幕设置',licenses:'开源许可',statements:'第三方声明',gpl:'GNU GPL v3',kuromoji:'Kuromoji 许可证',ipadic:'IPADIC 词典声明',ui:'界面组件声明'};
+export const titles:Record<string,string>={marks:'我的书签',works:'作品库',me:'我的',settings:'设置',about:'关于',playback:'播放',subtitles:'字幕与读音',appearance:'外观',files:'文件与曲库',track:'音轨字幕设置',licenses:'开源许可',statements:'第三方声明',gpl:'GNU GPL v3',kuromoji:'Kuromoji 许可证',ipadic:'IPADIC 词典声明',ui:'界面组件声明'};
 const notices:Record<string,string>={gpl,kuromoji,ipadic,ui};
 export function ProfileRow({label,detail,value,icon:Icon,action,disabled=false}:{label:string;detail?:string;value?:string;icon?:typeof Info;action:()=>void;disabled?:boolean}){
  return <button className="profile-row" aria-label={[label,value,detail].filter(Boolean).join("，")} onClick={action} disabled={disabled}>{Icon&&<Icon/>}<span><strong>{label}</strong>{detail&&<small>{detail}</small>}</span>{value&&<small>{value}</small>}<ChevronRight/></button>;
@@ -20,6 +20,7 @@ export function ProfileContent({page,p,go,panel,tree,changeTree}:{page:string;p:
  }
  const theme=({system:'跟随系统',light:'浅色',dark:'深色'} as Record<string,string>)[p.prefs.theme];
  if(page==='me')return <><div className="profile-identity"><div className="profile-avatar"><UserRound/></div><div><h2>本地用户</h2><small>偏好保存在此设备</small></div></div>
+ <ProfileRow label="我的书签" detail="回听已保存的时间点和片段" icon={BookOpen} action={()=>go('marks')}/>
  <ProfileRow label="设置" detail="播放、字幕与文件访问" icon={SlidersHorizontal} action={()=>go('settings')}/><ProfileRow label="关于 DL Sound" detail="版本、更新与开源许可" icon={Info} action={()=>go('about')}/></>;
  if(page==='settings')return <><h2>全局偏好</h2><ProfileRow label="播放" detail="速度、顺序与睡眠定时" icon={Volume2} value={p.prefs.speed+'×'} action={()=>go('playback')}/>
  <ProfileRow label="字幕与读音" detail="语言、假名与字幕样式" icon={Languages} value={p.prefs.language==='both'?'日中双语':p.prefs.language==='ja'?'日文':'中文'} action={()=>go('subtitles')}/>

@@ -54,3 +54,6 @@
 
 #app
 -keep class com.github.anrimian.utils.moxy.SingleOneExecutionStrategy { *; }
+
+# Kuromoji resolves its IPADIC resources relative to the runtime builder class.
+-keep class com.atilika.kuromoji.ipadic.Tokenizer$Builder

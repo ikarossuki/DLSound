@@ -129,6 +129,7 @@ class RubyLyricsFragment : Fragment() {
     }
 
     private fun editReading(fingerprint: String, id: String, index: Int) {
+        val trackUri = latest.track?.uri ?: return
         if (latest.document?.fingerprint != fingerprint) return
         val piece = latest.rendered.firstOrNull { it.cue.id == id }?.pieces?.getOrNull(index) ?: return
         val origin = when (piece.origin) { ReadingOrigin.SUBTITLE -> R.string.himitsu_reading_subtitle; ReadingOrigin.AUTOMATIC -> R.string.himitsu_reading_auto; ReadingOrigin.CORRECTION -> R.string.himitsu_reading_personal; ReadingOrigin.NONE -> R.string.himitsu_reading_unset }
@@ -136,11 +137,11 @@ class RubyLyricsFragment : Fragment() {
         val input = TextInputEditText(field.context).apply { inputType = InputType.TYPE_CLASS_TEXT; setText(piece.reading.orEmpty()); selectAll() }; field.addView(input)
         val dialog = MaterialAlertDialogBuilder(requireContext()).setTitle(piece.text).setMessage(getString(origin)).setView(field)
             .setPositiveButton(R.string.himitsu_save, null).setNegativeButton(R.string.himitsu_cancel, null)
-            .setNeutralButton(R.string.himitsu_reading_restore) { _, _ -> model.correct(fingerprint, id, index, null, piece) }.create()
+            .setNeutralButton(R.string.himitsu_reading_restore) { _, _ -> model.correct(trackUri, fingerprint, id, index, null, piece) }.create()
         dialog.setOnShowListener { dialog.getButton(androidx.appcompat.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
             val reading = input.text.toString().trim()
             if (!validReading(reading)) field.error = getString(R.string.himitsu_invalid_reading)
-            else { model.correct(fingerprint, id, index, reading, piece); dialog.dismiss() }
+            else { model.correct(trackUri, fingerprint, id, index, reading, piece); dialog.dismiss() }
         } }
         dialog.show()
     }

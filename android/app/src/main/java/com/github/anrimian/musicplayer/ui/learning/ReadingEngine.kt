@@ -34,17 +34,18 @@ internal object ReadingEngine {
             piece.reading?.let { supplied += ReadingSpan(offset, offset + piece.text.length, it) }
             offset += piece.text.length
         }
-        val selected = supplied.map { it to ReadingOrigin.SUBTITLE }.toMutableList()
+        val selected = java.util.TreeMap<Int, Pair<ReadingSpan, ReadingOrigin>>()
+        supplied.forEach { selected[it.start] = it to ReadingOrigin.SUBTITLE }
         if (cue.allowAutomaticReading) automatic.forEach { span ->
             if (span.start >= 0 && span.end <= text.length && span.start < span.end &&
-                supplied.none { it.start < span.end && span.start < it.end } &&
-                selected.none { it.first.start < span.end && span.start < it.first.end }) {
-                selected += span to ReadingOrigin.AUTOMATIC
+                (selected.floorEntry(span.start)?.value?.first?.end ?: 0) <= span.start &&
+                (selected.ceilingKey(span.start) ?: Int.MAX_VALUE) >= span.end) {
+                selected[span.start] = span to ReadingOrigin.AUTOMATIC
             }
         }
         val result = mutableListOf<ReadingPiece>()
         var cursor = 0
-        selected.sortedBy { it.first.start }.forEach { (span, origin) ->
+        selected.values.forEach { (span, origin) ->
             if (span.start > cursor) result += plainPieces(text.substring(cursor, span.start), cursor)
             result += align(text.substring(span.start, span.end), span.reading, span.start, origin)
             cursor = span.end

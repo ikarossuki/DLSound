@@ -13,6 +13,9 @@ class ListUpdateUtilTest {
         @JvmStatic
         fun generateTestData(): Stream<Arguments> {
             return Stream.of(
+                Arguments.of(listOf("A", "B", "C"), listOf("B", "C", "A")),
+                Arguments.of(listOf("A", "B", "C"), listOf("C", "A", "B")),
+                Arguments.of(listOf("A", "B", "C"), listOf("new", "C", "A", "B")),
                 //shift forward
                 Arguments.of(listOf("1", "2", "3", "4"), listOf("2", "3", "4", "5")),
                 //shift forward by 2

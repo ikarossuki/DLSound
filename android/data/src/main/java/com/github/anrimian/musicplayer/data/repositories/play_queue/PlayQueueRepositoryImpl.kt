@@ -52,7 +52,7 @@ class PlayQueueRepositoryImpl(
         .replay(1)
         .refCount()
 
-    private var consumeDeletedItemEvent = false
+    @Volatile private var consumeDeletedItemEvent = false
 
     override fun setPlayQueue(compositionIds: List<Long>, startPosition: Int): Completable {
         return Completable.fromAction { insertNewQueue(compositionIds, startPosition) }
@@ -254,7 +254,7 @@ class PlayQueueRepositoryImpl(
         uiStatePreferences.currentQueueItemId = itemId ?: UiStateRepositoryImpl.NO_ITEM
     }
 
-    private fun insertNewQueue(compositionIds: List<Long>, startPosition: Int) {
+    @Synchronized private fun insertNewQueue(compositionIds: List<Long>, startPosition: Int) {
         if (compositionIds.isEmpty()) {
             return
         }
@@ -262,18 +262,21 @@ class PlayQueueRepositoryImpl(
             throw TooManyPlayQueueItemsException()
         }
         consumeDeletedItemEvent = true
-        // clearCache&updateQueueTime means:
-        // time -> we clear queue in presenter
-        // clear cache -> we don't receive old list as first event
-        playQueueObservable.clearCache()
-        val itemId = playQueueDao.insertNewPlayQueue(
-            compositionIds,
-            settingsPreferences.isRandomPlayingEnabled,
-            startPosition
-        )
-        playQueueCreateTimeSubject.onNext(System.currentTimeMillis())
-        setCurrentItem(itemId)
-        consumeDeletedItemEvent = false
+        try {
+            // clearCache&updateQueueTime means:
+            // time -> we clear queue in presenter
+            // clear cache -> we don't receive old list as first event
+            playQueueObservable.clearCache()
+            val itemId = playQueueDao.insertNewPlayQueue(
+                compositionIds,
+                settingsPreferences.isRandomPlayingEnabled,
+                startPosition
+            )
+            playQueueCreateTimeSubject.onNext(System.currentTimeMillis())
+            setCurrentItem(itemId)
+        } finally {
+            consumeDeletedItemEvent = false
+        }
     }
 
     private fun getPlayQueueEvent(id: Long): Observable<PlayQueueEvent> {

@@ -3,8 +3,6 @@ package com.github.anrimian.musicplayer.domain.interactors.sleep_timer
 import com.github.anrimian.musicplayer.domain.interactors.player.LibraryPlayerInteractor
 import com.github.anrimian.musicplayer.domain.models.player.PlayerState
 import com.github.anrimian.musicplayer.domain.repositories.SettingsRepository
-import com.github.anrimian.musicplayer.domain.utils.coroutines.onSuccess
-import com.github.anrimian.musicplayer.domain.utils.coroutines.tickerLongValueFlow
 import io.reactivex.rxjava3.core.Observable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -14,11 +12,9 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.takeWhile
 import kotlinx.coroutines.rx3.asFlow
 import kotlinx.coroutines.rx3.asObservable
-import kotlin.time.Duration.Companion.seconds
 
 const val NO_TIMER = -1L
 
@@ -33,6 +29,14 @@ class SleepTimerInteractor(
 
     private var timerJob: Job? = null
     private var remainingMillis: Long = 0
+    private var playingSince: Long? = null
+    private var timerGeneration = 0L
+
+    private fun remainingNow(): Long {
+        val since = playingSince ?: return remainingMillis
+        return (remainingMillis - (System.nanoTime() - since) / 1_000_000L).coerceAtLeast(0)
+    }
+
     private var endOfTrackJob: Job? = null
     private var savedRepeatMode: Int? = null
 
@@ -59,12 +63,14 @@ class SleepTimerInteractor(
         }
     }
 
-    fun start() {
-        startSleepTimer(settingsRepository.sleepTimerTime)
+    @Synchronized fun start() {
         sleepTimerStateFlow.value = SleepTimerState.ENABLED
+        startSleepTimer(settingsRepository.sleepTimerTime)
     }
 
-    fun stop() {
+    @Synchronized fun stop() {
+        timerGeneration++
+        playingSince = null
         cancelEndOfTrack()
         timerJob?.cancel()
         remainingMillis = 0L
@@ -72,14 +78,17 @@ class SleepTimerInteractor(
         sleepTimerStateFlow.value = SleepTimerState.DISABLED
     }
 
-    fun pause() {
+    @Synchronized fun pause() {
+        timerGeneration++
+        remainingMillis = remainingNow()
+        playingSince = null
         timerJob?.cancel()
         sleepTimerStateFlow.value = SleepTimerState.PAUSED
     }
 
-    fun resume() {
-        startSleepTimer(remainingMillis)
+    @Synchronized fun resume() {
         sleepTimerStateFlow.value = SleepTimerState.ENABLED
+        startSleepTimer(remainingMillis)
     }
 
     fun getSleepTimerCountDownObservable(): Observable<Long> = timerCountDownFlow.asObservable()
@@ -99,21 +108,42 @@ class SleepTimerInteractor(
 
     fun getSleepTimerTime() = settingsRepository.sleepTimerTime
 
-    private fun startSleepTimer(timeMillis: Long) {
-        remainingMillis = timeMillis
-        timerJob = libraryPlayerInteractor.getPlayerStateObservable().asFlow()
-            .flatMapLatest { playerState ->
-                if (playerState == PlayerState.PLAY) {
-                    tickerLongValueFlow(remainingMillis, -1000L, 1.seconds, 1.seconds)
-                        .onEach { millis -> remainingMillis = millis }
-                } else {
-                    flowOf(remainingMillis)
+    @Synchronized private fun startSleepTimer(timeMillis: Long) {
+        val generation = ++timerGeneration
+        timerJob?.cancel()
+        playingSince = null
+        remainingMillis = timeMillis.coerceAtLeast(0)
+        timerCountDownFlow.value = remainingMillis
+        timerJob = libraryPlayerInteractor.getPlayerStateObservable().distinctUntilChanged().asFlow()
+            .flatMapLatest { state ->
+                val remaining = synchronized(this) {
+                    if (generation != timerGeneration) return@flatMapLatest kotlinx.coroutines.flow.emptyFlow<Long>()
+                    remainingMillis = remainingNow()
+                    playingSince = if (state == PlayerState.PLAY) System.nanoTime() else null
+                    remainingMillis
+                }
+                if (state != PlayerState.PLAY) flowOf(remaining)
+                else kotlinx.coroutines.flow.flow {
+                    while (true) {
+                        val value = synchronized(this@SleepTimerInteractor) { remainingNow() }
+                        emit(value)
+                        if (value == 0L) break
+                        kotlinx.coroutines.delay(minOf(value, 1000L))
+                    }
                 }
             }
-            .onStart { timerCountDownFlow.value = remainingMillis }
-            .onEach { millis -> timerCountDownFlow.value = millis }
-            .takeWhile { millis -> millis >= 0 }
-            .onSuccess(::onTimerFinished)
+            .takeWhile { millis ->
+                synchronized(this) {
+                    if (generation != timerGeneration) return@synchronized false
+                    timerCountDownFlow.value = millis
+                    if (millis == 0L) {
+                        playingSince = null
+                        remainingMillis = 0
+                        onTimerFinished()
+                    }
+                    millis > 0
+                }
+            }
             .launchIn(appComputationScope)
     }
 

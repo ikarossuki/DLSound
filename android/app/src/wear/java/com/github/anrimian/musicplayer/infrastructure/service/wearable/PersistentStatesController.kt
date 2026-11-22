@@ -47,6 +47,7 @@ class PersistentStatesController(
             wearableStateHolder.setProtocolVersion(WearableConstants.WEARABLE_PROTOCOL_VERSION)
             sendCurrentState()
         }
+        if (stateDisposable.size() != 0) return
         stateDisposable.add(
             playerInteractor.getIsPlayingStateObservable()
                 .observeOn(ioScheduler)

@@ -1,7 +1,7 @@
 import {useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 
 type Props<T> = {
-  items: T[]; keyOf:(item:T)=>string; estimate:number;
+  items: T[]; keyOf:(item:T,index:number)=>string; estimate:number;
   render:(item:T,index:number)=>ReactNode;
   centerIndex?:number; scrollSelector:string;
 };
@@ -66,7 +66,7 @@ export function WindowedRows<T>({items,keyOf,estimate,render,centerIndex,scrollS
     scroller.scrollTop=origin+(offsets[centerIndex]+offsets[centerIndex+1])/2-scroller.clientHeight*.46;
   },[centerIndex,offsets,scrollSelector,items]);
   return <div ref={root} style={{position:'relative',height:offsets[items.length]}} onBlur={e=>{if(!e.currentTarget.contains(e.relatedTarget as Node))setFocus(-1);}}>
-    {indices.map(i=><div key={keyOf(items[i])} data-index={i} onFocus={()=>setFocus(i)}
+    {indices.map(i=><div key={keyOf(items[i],i)} data-index={i} onFocus={()=>setFocus(i)}
       style={{position:'absolute',top:offsets[i],left:0,right:0}}>{render(items[i],i)}</div>)}
   </div>;
 }

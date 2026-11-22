@@ -53,14 +53,13 @@ object CollectionsTestUtils {
         name: String = "",
         checkIndex: Boolean = false
     ) {
+        assertEquals(values.size, size, "Unexpected size of $name")
         val removeList = ArrayList(this)
         values.forEachIndexed { i, value ->
             if (checkIndex) {
                 assertTrue(this.elementAt(i) == value, "Collection $name doesn't contains value: $value at index: $i \n But contains value: ${this.elementAt(i)}")
-            } else {
-                assertTrue(this.contains(value), "Collection $name doesn't contains value: $value \n But contains values: $this")
             }
-            removeList.remove(value)
+            assertTrue(removeList.remove(value), "Missing occurrence of $value in $name")
         }
         if (removeList.isNotEmpty()) {
             throw AssertionError("Collection $name contains unwanted entries: ${removeList.joinToString()}}")

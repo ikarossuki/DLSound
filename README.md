@@ -5,7 +5,7 @@
 > <ruby>明日<rp>（</rp><rt>あした</rt><rp>）</rp></ruby>、また。<br>
 > 明天见。
 
-**[下载 Android APK](https://github.com/ikarossuki/DLSound/releases/latest)**　适用于 Android 8.0 及以上。Android 8 已验证系统 WebView 69；更旧的内核可通过设备的应用商店更新 Android System WebView 或 Chrome。在发布页的 **Assets** 中选择扩展名为 `.apk` 的文件。[1.3.6 更新说明](docs/releases/v1.3.6.md)
+**[下载 Android APK](https://github.com/ikarossuki/DLSound/releases/latest)**　适用于 Android 8.0 及以上。Android 8 已验证系统 WebView 69；更旧的内核可通过设备的应用商店更新 Android System WebView 或 Chrome。在发布页的 **Assets** 中选择扩展名为 `.apk` 的文件。[1.3.7 更新说明](docs/releases/v1.3.7.md)
 
 ## 播放自己的音频和字幕
 

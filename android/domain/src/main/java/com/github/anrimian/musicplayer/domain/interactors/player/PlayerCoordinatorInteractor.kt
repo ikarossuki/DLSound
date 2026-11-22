@@ -1,5 +1,6 @@
 package com.github.anrimian.musicplayer.domain.interactors.player
 
+import com.github.anrimian.musicplayer.domain.models.composition.source.LibraryCompositionSource
 import com.github.anrimian.musicplayer.domain.models.composition.source.CompositionSource
 import com.github.anrimian.musicplayer.domain.models.player.PlayerState
 import com.github.anrimian.musicplayer.domain.models.player.events.PlayerEvent
@@ -23,6 +24,24 @@ class PlayerCoordinatorInteractor(
     private val activePlayerTypeSubject = BehaviorSubject.createDefault<Opt<PlayerType>>(Opt())
     private val playerActivationHistory = LinkedList<PlayerType>()
     private val stateLock = Any()
+
+    fun waitForLibrarySource(compositionId: Long) = playerInteractor.getCurrentSourceObservable()
+        .filter { (it.value as? LibraryCompositionSource)?.composition?.id == compositionId }
+        .firstOrError()
+
+    fun observeListeningRange(type: PlayerType) = playerInteractor.observeListeningRange()
+        .map { if (isPlayerTypeActive(type)) it else Opt() }
+
+    fun changeListeningRange(type: PlayerType, matches: (CompositionSource) -> Boolean,
+                             start: Long?, end: Long?, passes: Int, pauseAtEnd: Boolean) {
+        synchronized(stateLock) {
+            val source = preparedSourcesMap[type]?.source
+            require(source != null && matches(source)) { "音轨已变化，请重新选择" }
+            applyPlayerType(type)
+            if (start == null) playerInteractor.clearListeningRange()
+            else playerInteractor.listenFrom(start, end, passes, pauseAtEnd)
+        }
+    }
 
     fun play(playerType: PlayerType, delay: Long = 0L) {
         synchronized(stateLock) {

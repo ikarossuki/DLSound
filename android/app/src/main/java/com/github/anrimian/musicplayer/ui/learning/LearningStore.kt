@@ -46,13 +46,29 @@ internal class LearningStore(context: Context) {
         }else result.put(backupId,local)
         return result
     }
+    private fun validOrigin(pair: JSONArray?) = pair != null && pair.length() == 2 &&
+        pair.opt(0) is String && runCatching { java.util.UUID.fromString(pair.getString(0)) }.isSuccess &&
+        pair.opt(1) is String && pair.getString(1).isNotBlank()
+
+    private fun savedOrigins(uri: String): List<JSONArray> {
+        val raw = migrated.getString("origins-" + textFingerprint(uri), null) ?: return emptyList()
+        val array = runCatching { JSONArray(raw) }.getOrNull() ?: return emptyList()
+        return (0 until array.length()).mapNotNull { array.optJSONArray(it) }.filter(::validOrigin)
+    }
+
     fun backupOrigins(uri: String): JSONArray {
         val local=JSONArray().put(JSONArray().put(backupId).put(uri))
-        val previous=JSONArray(migrated.getString("origins-"+textFingerprint(uri),"[]"))
-        for(i in 0 until previous.length()) local.put(previous.getJSONArray(i))
+        savedOrigins(uri).forEach { local.put(it) }
         return local
     }
-    fun restoreReadings(records: org.json.JSONObject, sources: Map<String,JSONArray>) {
+    fun validateOrigins(records: org.json.JSONObject, aliases: JSONArray) {
+        for (i in 0 until aliases.length()) {
+            val pair = aliases.optJSONArray(i)
+            require(pair != null && validOrigin(pair) && records.has(pair.getString(0))) { "备份中的读音来源关联无效" }
+        }
+    }
+
+    fun prepareReadings(records: org.json.JSONObject, sources: Map<String,JSONArray>): android.content.SharedPreferences.Editor {
         val edit=migrated.edit()
         val keyPattern=Regex("(reading|offset)-[a-f0-9]{64}")
         for(id in records.keys()) {
@@ -74,20 +90,16 @@ internal class LearningStore(context: Context) {
         }
         for((uri,aliases) in sources){
             val list=linkedSetOf<String>()
-            val existing=JSONArray(migrated.getString("origins-"+textFingerprint(uri),"[]"))
-            for(array in listOf(aliases,existing)) for(i in 0 until array.length()){
-                val pair=array.getJSONArray(i)
-                if(records.has(pair.getString(0)) || array===existing) list.add(pair.toString())
+            for(i in 0 until aliases.length()) {
+                list.add(aliases.getJSONArray(i).toString())
             }
+            savedOrigins(uri).forEach { list.add(it.toString()) }
             edit.putString("origins-"+textFingerprint(uri),JSONArray(list.map { JSONArray(it) }).toString())
         }
-        edit.apply()
+        return edit
     }
     private fun imported(track:String, makeKey:(String)->String):String? {
-        val raw=migrated.getString("origins-"+textFingerprint(track),null)?:return null
-        val origins=JSONArray(raw)
-        for(i in 0 until origins.length()){
-            val pair=origins.getJSONArray(i)
+        for(pair in savedOrigins(track)){
             val key=pair.getString(0)+makeKey(pair.getString(1))
             if(migrated.contains(key))return key
         }
@@ -144,10 +156,15 @@ internal class LearningStore(context: Context) {
         preferences.edit().putString(key, version).apply()
         return previous != null && previous != version
     }
-    fun correction(track: String, document: SubtitleDocument, cue: SubtitleCue, piece: ReadingPiece): String? {
-        val key=correctionKey(track,document,cue,piece)
-        val value=preferences.getString(key,null) ?: imported(track){correctionKey(it,document,cue,piece)}?.let { migrated.getString(it,null) }
-        return value?.takeIf { it.isNotEmpty() }
+    fun correctionsFor(track: String, document: SubtitleDocument): (SubtitleCue, ReadingPiece) -> String? {
+        val origins = savedOrigins(track)
+        return { cue, piece ->
+            val local = preferences.getString(correctionKey(track, document, cue, piece), null)
+            val value = local ?: origins.firstNotNullOfOrNull { pair ->
+                migrated.getString(pair.getString(0) + correctionKey(pair.getString(1), document, cue, piece), null)
+            }
+            value?.takeIf(String::isNotEmpty)
+        }
     }
     fun correct(track: String, document: SubtitleDocument, cue: SubtitleCue, piece: ReadingPiece, reading: String?) {
         val edit = preferences.edit()
