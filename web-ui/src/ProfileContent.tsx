@@ -9,7 +9,7 @@ import logo from './dl-sound.svg';
 export const titles:Record<string,string>={me:'我的',settings:'设置',about:'关于',playback:'播放',subtitles:'字幕与读音',appearance:'外观',files:'文件与曲库',track:'音轨字幕设置',licenses:'开源许可',statements:'第三方声明',gpl:'GNU GPL v3',kuromoji:'Kuromoji 许可证',ipadic:'IPADIC 词典声明',ui:'界面组件声明'};
 const notices:Record<string,string>={gpl,kuromoji,ipadic,ui};
 export function ProfileRow({label,detail,value,icon:Icon,action,disabled=false}:{label:string;detail?:string;value?:string;icon?:typeof Info;action:()=>void;disabled?:boolean}){
- return <button className="profile-row" aria-label={label} onClick={action} disabled={disabled}>{Icon&&<Icon/>}<span><strong>{label}</strong>{detail&&<small>{detail}</small>}</span>{value&&<small>{value}</small>}<ChevronRight/></button>;
+ return <button className="profile-row" aria-label={[label,value,detail].filter(Boolean).join("，")} onClick={action} disabled={disabled}>{Icon&&<Icon/>}<span><strong>{label}</strong>{detail&&<small>{detail}</small>}</span>{value&&<small>{value}</small>}<ChevronRight/></button>;
 }
 export function ProfileContent({page,p,go,panel,tree,changeTree}:{page:string;p:ReturnType<typeof usePlayer>;go:(page:string)=>void;panel:(id:string)=>void;tree:boolean;changeTree:(tree:boolean)=>void}){
  const [checking,setChecking]=useState(false),[status,setStatus]=useState(''),[available,setAvailable]=useState(false);
@@ -27,7 +27,7 @@ export function ProfileContent({page,p,go,panel,tree,changeTree}:{page:string;p:
  <h2>仅对当前音轨生效</h2><ProfileRow label="音轨字幕设置" detail={p.track?'《'+p.track.title+'》的字幕和读音修正':'播放一首音轨后可设置字幕'} icon={AudioLines} disabled={!p.track} action={()=>go('track')}/></>;
  if(page==='appearance')return <><h2>显示</h2><ProfileRow label="主题" value={theme} icon={SunMoon} action={()=>panel('theme')}/></>;
  if(page==='files')return <><h2>访问权限</h2><ProfileRow label="音乐库访问" detail="读取设备中的音频" value={p.mediaPermission?'已允许':'未授权'} action={p.requestMedia}/>
- <ProfileRow label="字幕目录" detail="匹配同目录的字幕" value={p.treeGranted?'已选择':'选择目录'} action={p.requestTree}/><h2>曲库</h2>
+ {p.videoOptional&&<ProfileRow label="视频容器音频" detail="需要浏览 MP4 等视频文件时开启" value={p.videoGranted?'已允许':'未授权'} action={p.requestVideo}/>}<ProfileRow label="字幕目录" detail="匹配同目录的字幕" value={p.treeGranted?'已选择':'选择目录'} action={p.requestTree}/><h2>迁移数据</h2><ProfileRow label="导出备份" detail="歌单、收藏、偏好及曲库字幕修正" action={()=>act('exportBackup')}/><ProfileRow label="恢复备份" detail="先将原音频放入新设备，再选择备份文件" action={()=>act('importBackup')}/><h2>曲库</h2>
  <label className="profile-choice">文件夹浏览方式<select value={tree?'tree':'flat'} onChange={e=>changeTree(e.target.value==='tree')}><option value="flat">平铺列表</option><option value="tree">按目录浏览</option></select></label>
  <ProfileRow label="刷新音乐库" icon={RefreshCw} action={p.refresh}/></>;
  if(page==='about')return <><div className="profile-identity about-brand"><img src={logo} alt=""/><div><h2>DL Sound</h2><small>本地音乐与日语音声播放器</small></div></div>

@@ -1,8 +1,9 @@
-import {useEffect, useLayoutEffect, useRef, useState, type ReactNode} from 'react';
+import {useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode} from 'react';
 import {Button} from '@/components/ui/button';
 import {cn} from '@/lib/utils';
 import {audioTime} from './timeline.mjs';
-import {formatTime, plainJa} from './domain.mjs';
+import {WindowedRows} from './WindowedRows';
+import {lyricLabel,formatTime, plainJa} from './domain.mjs';
 import {stepSpring,stepInertia,lyricProjection} from './lyricMotion.mjs';
 
 type Props = {offset:number; duration:number; cues:any[]; active:any[]; time:number; follow:boolean; setFollow:(v:boolean)=>void; language:string; depth:boolean; reducedMotion:boolean; rubyVisible:boolean; layoutRevision:number; font:number; rubyScale:number; trackKey:string; onSeek:(cue:any)=>void; onCorrect:(cue:any)=>void; renderJapanese:(cue:any)=>ReactNode};
@@ -10,6 +11,8 @@ type Props = {offset:number; duration:number; cues:any[]; active:any[]; time:num
 /** Audio selection and visual focus are independent. Touch position is direct;
  * release inertia and wheel/auto-follow springs repaint the same geometry. */
 export function LyricStage({offset,duration,cues,active,time,follow,setFollow,language,depth,reducedMotion,rubyVisible,layoutRevision,font,rubyScale,trackKey,onSeek,onCorrect,renderJapanese}:Props){
+ const long=cues.length>120;
+ const focusIndex=useMemo(()=>active.length?cues.indexOf(active[0]):-1,[cues,active[0]]);
  const viewport=useRef<HTMLDivElement>(null), frame=useRef(0), moved=useRef(false), start=useRef({x:0,y:0});
  const holdingDrag=useRef(false);
  const [previewStart,setPreviewStart]=useState<number|null>(null);
@@ -26,10 +29,11 @@ export function LyricStage({offset,duration,cues,active,time,follow,setFollow,la
   const focus=el.scrollTop+el.clientHeight*.46;
   const rows=Array.from(el.querySelectorAll<HTMLElement>('.lyric-row'));
   // Read the untransformed row geometry first; effects never change hit boxes.
-  const positions=rows.map(row=>row.offsetTop+row.offsetHeight/2);
+  const origin=el.getBoundingClientRect().top-el.scrollTop;
+  const positions=rows.map(row=>row.getBoundingClientRect().top-origin+row.offsetHeight/2);
   if(holdingDrag.current && rows.length){
    const middle=el.scrollTop+el.clientHeight/2;
-   const target=rows.find(row=>row.offsetTop+row.offsetHeight>middle) ?? rows[rows.length-1];
+   const target=rows.find((row,i)=>positions[i]+row.offsetHeight/2>middle) ?? rows[rows.length-1];
    setPreviewStart(Number(target.dataset.start));
   }
   rows.forEach((row,i)=>{
@@ -61,6 +65,7 @@ export function LyricStage({offset,duration,cues,active,time,follow,setFollow,la
   const el=viewport.current;if(!el)return;
   el.style.setProperty('--lyric-pad',`${el.clientHeight*.46}px`);
   const rows=Array.from(el.querySelectorAll<HTMLElement>('.lyric-row'));
+  if(long){schedule();return;}
   const target=rows.find(row=>row.dataset.active==='true')||rows.find(row=>Number(row.dataset.start)>=time)||rows.at(-1);
   if(!target)return;
   const y=Math.max(0,target.offsetTop+target.offsetHeight/2-el.clientHeight*.46);
@@ -96,21 +101,22 @@ export function LyricStage({offset,duration,cues,active,time,follow,setFollow,la
   return()=>{clearPreview();el.removeEventListener('touchstart',begin);el.removeEventListener('touchmove',drag);el.removeEventListener('touchend',end);el.removeEventListener('touchcancel',end);stopMotion();};
  },[layoutKey]);
  function manual(){setFollow(false);stopMotion();}
- return <div className="lyric-stage" data-depth={depth&&!reduced}>
-  <div className="lyric-window">
-  <div ref={viewport} className="lyrics-scroll" tabIndex={0} aria-label="连续歌词，点击台词跳转" onScroll={schedule}
-   onKeyDown={e=>{if(['ArrowDown','ArrowUp','PageDown','PageUp','Home','End',' '].includes(e.key))manual();}}>
-   <div className="lyrics-inner">
-    {cues.map(c=>{const current=active.some(a=>a.key===c.key);return <button key={c.key} data-start={c.startMs} data-active={current}
+const renderRow=(c:any)=>{const current=active.some(a=>a.key===c.key);return <button key={c.key} data-start={c.startMs} data-active={current}
      onContextMenu={e=>{e.preventDefault();onCorrect(c);}} className={cn('lyric-row',current&&'lyric-active')} aria-current={current?'true':undefined}
-     aria-label={`${current?'当前台词，':''}${formatTime(c.startMs)}，${language==='zh'&&!c.unlabelledText?c.zh||'暂无中文翻译':plainJa(c)||'暂无日文'}，点击跳转`}
+     aria-label={(current?'当前台词，':'')+lyricLabel(c,language,rubyVisible)}
      onClick={()=>{if(moved.current){moved.current=false;return;}onSeek(c);setFollow(true);}}>
      {current&&<span className="current-line-mark" aria-hidden="true"/>}
      <span className="lyric-text">
       {(c.unlabelledText||language!=='zh')&&<span className="ja-line" lang={c.unlabelledText?'':'ja'}>{plainJa(c)?renderJapanese(c):'暂无日文'}</span>}
       {!c.unlabelledText&&language!=='ja'&&<span lang="zh-Hans" className={cn('zh-line',language==='zh'&&'zh-primary')}>{c.zh||'暂无中文翻译'}</span>}
      </span>
-    </button>;})}
+    </button>;};
+ return <div className="lyric-stage" data-depth={depth&&!reduced}>
+  <div className="lyric-window">
+  <div ref={viewport} className="lyrics-scroll" tabIndex={0} aria-label="连续歌词，点击台词跳转" onScroll={schedule}
+   onKeyDown={e=>{if(['ArrowDown','ArrowUp','PageDown','PageUp','Home','End',' '].includes(e.key))manual();}}>
+   <div className="lyrics-inner">
+    {long ? <WindowedRows items={cues} keyOf={c=>c.key} estimate={Math.max(76,font*3)} scrollSelector=".lyrics-scroll" centerIndex={follow?focusIndex:undefined} render={renderRow}/> : cues.map(renderRow)}
    </div>
   </div>
   {previewStart!==null&&<div className="drag-guide" aria-hidden="true"><span/><time>{formatTime(audioTime(previewStart,offset,duration))}</time></div>}

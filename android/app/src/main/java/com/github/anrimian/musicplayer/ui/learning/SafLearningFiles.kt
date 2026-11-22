@@ -44,6 +44,38 @@ internal class SafLearningFiles(private val context: Context) {
         return result.sortedWith(compareBy<LearningFile> { !it.directory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
     }
 
+    fun incomingFile(uri: Uri): Pair<LearningFile, String?> {
+        if(uri.scheme=="file"){
+            val file=File(requireNotNull(uri.path)).canonicalFile
+            val roots=context.getExternalFilesDirs(null).filterNotNull().map { it.canonicalPath.substringBefore("/Android/data/")+"/" }
+            require(roots.any { file.path.startsWith(it) } && !file.path.contains("/Android/") && file.isFile && file.canRead())
+            return LearningFile(uri.toString(),file.name,false,file.length(),file.lastModified(),true) to readableParent(file)
+        }
+        require(uri.scheme == "content")
+        val authority=requireNotNull(uri.authority)
+        val own=context.packageManager.getPackageInfo(context.packageName,android.content.pm.PackageManager.GET_PROVIDERS).providers.orEmpty()
+        require(own.none { provider -> authority in provider.authority.split(';') })
+        context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { } ?: error("file_unavailable")
+        val name = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
+            if (it.moveToFirst()) it.getString(0) else null
+        } ?: uri.lastPathSegment.orEmpty()
+        val path = if (uri.authority == android.provider.MediaStore.AUTHORITY) runCatching {
+            context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null)?.use {
+                if (it.moveToFirst()) it.getString(0) else null
+            }
+        }.getOrNull() else null
+        val treeParent = if (uri.authority == "com.android.externalstorage.documents" &&
+            DocumentsContract.isDocumentUri(context, uri)) {
+            val id = DocumentsContract.getDocumentId(uri)
+            val parent = id.substringBeforeLast('/',id.substringBefore(':')+":")
+            context.contentResolver.persistedUriPermissions.firstOrNull {
+                it.isReadPermission && it.uri.authority == uri.authority && DocumentsContract.isTreeUri(it.uri) &&
+                    DocumentsContract.getTreeDocumentId(it.uri).let { root -> root == parent || parent.startsWith(root.trimEnd('/')+"/") || root.endsWith(':') && parent.startsWith(root) }
+            }?.let { DocumentsContract.buildDocumentUriUsingTree(it.uri, parent).toString() }
+        } else null
+        return LearningFile(uri.toString(), name, false, audio = true) to (treeParent ?: path?.let { readableParent(File(it)) })
+    }
+
     fun readableParent(audioFile: File): String? {
         val path = audioFile.absolutePath
         val documentId = if (path.startsWith("/storage/emulated/0/")) {

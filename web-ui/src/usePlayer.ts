@@ -1,6 +1,6 @@
 import {useEffect,useState,useSyncExternalStore} from 'react';
 import {toast} from 'sonner';
-export type Track={id:string;title:string;artist:string;album:string;duration:number;folder:string;folderName?:string;demo:boolean;size?:number;cover?:string;comment?:string;fileName?:string};
+export type Track={id:string;title:string;artist:string;album:string;albumId?:string;albumArtist?:string;trackNumber?:number;discNumber?:number;duration:number;folder:string;folderName?:string;demo:boolean;size?:number;cover?:string;comment?:string;fileName?:string};
 export type QueueItem={itemId:string;track:Track};
 declare global {interface Window {DLSound?:{send:(s:string)=>boolean;readFolderBrowser:()=>string|null;saveFolderBrowser:(tree:boolean,path:string)=>boolean};dlSoundEvent?:(s:any)=>void;dlSoundBack?:()=>boolean;}}
 export const initial:any={tracks:[],queue:[],index:-1,time:0,duration:0,playing:false,loading:false,mediaPermission:false,libraryLoading:true,sourceError:'',doc:null,cues:[],subtitleError:'',subtitleStatus:'',manual:false,readingBusy:false,readingFailed:false,offset:0,offsetKey:'',favorites:[],playlists:[],fontScale:1,reducedMotion:false,systemDark:false,prefs:{theme:'system',language:'ja',ruby:true,font:20,rubyScale:.42,depth:true,speed:1,repeat:'all',shuffle:false},sleep:{mode:'off'}};
@@ -62,9 +62,9 @@ export function usePlayer(watchClock:boolean){
  pref:(key:string,value:any)=>act('pref',{key,value}),toggle:()=>act('toggle'),pause:()=>act('pause'),seek:(ms:number)=>act('seek',{ms}),
  select:(t:Track,_play=true,collection?:Track[])=>act('play',{ids:(collection?.some(x=>x.id===t.id)?collection:[t]).map(x=>x.id),startId:t.id}),playCollection:(ts:Track[])=>act('play',{ids:ts.map(x=>x.id)}),
  skip:(step:number)=>act('skip',{step}),jump:(i:number)=>act('jump',{itemId:s.queue[i]?.itemId}),append:(t:Track,next=false)=>act('append',{id:t.id,next}),
- remove:(itemId:string)=>act('remove',{itemId}),move:(itemId:string,step:number)=>act('move',{itemId,step}),clear:()=>act('clear'),
+ remove:(itemId:string)=>act('remove',{itemId}),move:(itemId:string,step:number)=>act('move',{itemId,step}),clear:()=>command('clear'),
  setSleep:(v:any)=>act('sleep',v),setOffset:(value:number)=>act('offset',{value,key:s.offsetKey}),importSubtitle:()=>act('importSubtitle'),automatic:()=>act('automatic'),
- correction:(cueId?:string,index?:number)=>act('correction',{cueId,index}),requestMedia:()=>act('requestMedia'),requestTree:()=>act('requestTree'),refresh:()=>act('refresh'),
+ correction:(cueId?:string,index?:number)=>act('correction',{cueId,index,key:s.offsetKey}),requestVideo:()=>act('requestVideo'),closeExternal:()=>act('closeExternal'),requestMedia:()=>act('requestMedia'),requestTree:()=>act('requestTree'),refresh:()=>act('refresh'),
  favorite:(id:string)=>act('favorite',{id}),playlist:(action:string,data:any)=>command('playlist',{operation:action,...data}),
  };
 }

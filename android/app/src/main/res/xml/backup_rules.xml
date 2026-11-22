@@ -5,4 +5,5 @@
     <include domain="file" path="playlists"/>
     <include domain="sharedpref" path="settings_preferences.xml"/>
     <include domain="sharedpref" path="theme_preferences.xml"/>
+    <include domain="sharedpref" path="dlsound-display.xml"/>
 </full-backup-content>

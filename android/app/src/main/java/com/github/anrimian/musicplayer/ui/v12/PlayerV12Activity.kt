@@ -50,7 +50,9 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
 /** APK-only presentation. All playback/queue/library/subtitle state remains in Android. */
-class PlayerV12Activity : AppCompatActivity() {
+open class PlayerV12Activity : AppCompatActivity() {
+    protected open val externalView = false
+    private var externalSpeed = 1f
     private val component get() = Components.getAppComponent()
     private val player get() = component.libraryPlayerInteractor()
     private val playlistService get() = component.playlistsInteractor()
@@ -64,6 +66,7 @@ class PlayerV12Activity : AppCompatActivity() {
     private val preferences by lazy { getSharedPreferences("dlsound-player", MODE_PRIVATE) }
     private val snapshot = JSONObject()
     private val tracks = ConcurrentHashMap<Long, Composition>()
+    private var libraryJson = "[]"
     private val trackJson = ConcurrentHashMap<Long, JSONObject>()
     private var queue = emptyList<PlayQueueItem>()
     private var currentItem: Long? = null
@@ -87,9 +90,47 @@ class PlayerV12Activity : AppCompatActivity() {
     private var lastSubtitleStatus = ""
     private var lastNotice = 0
     private var renderRevision = 0
-    private val mediaPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-        publishPermission(); if (Permissions.hasFilePermission(this)) startLibrary()
+    private val mediaPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
+        grants.forEach { (permission,granted) -> preferences.edit().putBoolean("asked-"+permission,!granted).apply() }
+        publishPermission(); if (!externalView && Permissions.hasFilePermission(this)) { startLibrary(); component.storageScannerInteractor().rescanStorage() }
     }
+    private var backupBusy=false
+    private fun backupFile(uri:Uri?, restore:Boolean) {
+        if(uri==null || backupBusy)return
+        backupBusy=true
+        lifecycleScope.launch {
+            try {
+                val backup=LibraryBackup(store,trackJson.toMap(),tracks.toMap())
+                val prefs=JSONObject(snapshot.getJSONObject("prefs").toString())
+                prefs.put("treeMode",JSONObject(preferences.getString("folderBrowser","{}")).optBoolean("tree"))
+                val favorites=preferences.getStringSet("favorites",emptySet()).orEmpty().toSet()
+                val message=if(restore){
+                    val result=withContext(Dispatchers.IO){
+                        val text=contentResolver.openInputStream(uri)?.use(SafLearningFiles::readText) ?: throw IllegalStateException("无法读取备份文件")
+                        backup.restore(JSONObject(text))
+                    }
+                    for(key in listOf("theme","language","font","ruby","rubyScale","depth","speed","repeat","shuffle")){
+                        if(result.preferences.has(key)) preference(obj("key" to key,"value" to result.preferences.get(key)))
+                    }
+                    preferences.edit().putStringSet("favorites",favorites+result.favorites)
+                        .putString("folderBrowser",obj("tree" to result.preferences.optBoolean("treeMode"),"path" to "").toString()).apply()
+                    publishPreferences();publishOffset();model.reloadSubtitle();emit(obj("browserRevision" to System.nanoTime().toString()))
+                    if(result.missing.isEmpty()) "恢复完成，所有音轨均已匹配。" else "恢复完成，以下音轨需要重新关联：\n"+result.missing.joinToString("\n")
+                }else{
+                    withContext(Dispatchers.IO){
+                        val bytes=backup.export(prefs,favorites).toString().toByteArray()
+                        require(bytes.size<=SafLearningFiles.MAX_BYTES) { "备份超过 8 MB，无法导出" }
+                        contentResolver.openOutputStream(uri,"wt")?.use { it.write(bytes) } ?: throw IllegalStateException("无法写入备份文件")
+                    }
+                    "备份文件已保存。"
+                }
+                MaterialAlertDialogBuilder(dialogContext()).setTitle(if(restore)"恢复备份" else "导出备份").setMessage(message).setPositiveButton("完成",null).show()
+            }catch(e:Exception){error("备份操作未完成："+(e.localizedMessage?:"请检查文件权限"))}
+            finally{backupBusy=false}
+        }
+    }
+    private val saveBackup=registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { backupFile(it,false) }
+    private val openBackup=registerForActivityResult(ActivityResultContracts.OpenDocument()) { backupFile(it,true) }
     private val treePicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) runCatching {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -114,9 +155,10 @@ class PlayerV12Activity : AppCompatActivity() {
         }
         model = ViewModelProvider(this, object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(c: Class<T>): T {
-                @Suppress("UNCHECKED_CAST") return LearningViewModel(application, true) as T
+                @Suppress("UNCHECKED_CAST") return LearningViewModel(application, !externalView, externalView) as T
             }
         })[LearningViewModel::class.java]
+        if (externalView && model.state.value.track == null) intent.data?.let(model::openIncoming)
         pickingTrack = savedInstanceState?.getString("pickingTrack")
         WindowCompat.setDecorFitsSystemWindows(window, false)
         val root = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
@@ -176,13 +218,14 @@ class PlayerV12Activity : AppCompatActivity() {
         }
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                web.evaluateJavascript("window.dlSoundBack ? window.dlSoundBack() : false") { if (it != "true") moveTaskToBack(true) }
+                web.evaluateJavascript("window.dlSoundBack ? window.dlSoundBack() : false") { if (it != "true") { if(externalView) finish() else moveTaskToBack(true) } }
             }
         })
         publishPreferences(); publishPermission(); publishEnvironment()
+        ProcessLifecycleOwner.get().lifecycle.addObserver(processObserver)
+        if (!externalView) {
         subscriptions.add(player.getPlayQueueObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({ queue = it; publishQueue() }, { error("播放队列读取失败") }))
         subscriptions.add(player.getCurrentQueueItemObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({ currentItem = it.playQueueItem?.itemId; publishQueue() }, {}))
-        ProcessLifecycleOwner.get().lifecycle.addObserver(processObserver)
         subscriptions.add(player.getTrackPositionObservable().sample(200, TimeUnit.MILLISECONDS)
             .observeOn(AndroidSchedulers.mainThread()).subscribe({ position ->
                 val time = position.coerceAtLeast(0)
@@ -200,7 +243,18 @@ class PlayerV12Activity : AppCompatActivity() {
             if(millis == -1L && !timer.isEndOfTrack()) preferences.edit().remove("sleep-previous-repeat").apply()
             emit(obj("sleep" to if (timer.isEndOfTrack()) obj("mode" to "end") else if (millis >= 0) obj("mode" to "timer", "minutes" to timer.getSleepTimerTime()/60000, "remainingMs" to millis) else obj("mode" to "off")))
         }, {}))
+        } else {
+            emit(obj("externalView" to true))
+            subscriptions.add(component.learningPlayerInteractor().getPlaybackSpeedObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({ externalSpeed=it; publishPreferences() }, {}))
+        }
         lifecycleScope.launch { model.state.collect { state ->
+            if (externalView) {
+                val t = state.track
+                emit(obj("queue" to JSONArray().apply { if(t!=null) put(obj("itemId" to "incoming", "track" to obj(
+                    "id" to "incoming", "title" to t.name, "artist" to "从文件打开", "fileName" to t.name, "duration" to state.duration))) },
+                    "index" to if(t!=null) 0 else -1, "duration" to state.duration, "time" to state.position,
+                    "playing" to state.playing, "loading" to state.openingAudio))
+            }
             if (lastDocument !== state.document || lastRendered !== state.rendered) {
                 lastDocument = state.document; lastRendered = state.rendered
                 val cues = JSONArray(state.rendered.map { rendered ->
@@ -213,7 +267,7 @@ class PlayerV12Activity : AppCompatActivity() {
                 emit(obj("doc" to state.document?.let { obj("documentId" to it.id, "fingerprint" to it.fingerprint, "warningCount" to it.warningCount) }, "cues" to cues, "renderRevision" to ++renderRevision))
                 publishOffset()
             }
-            if(state.noticeSequence != lastNotice) { lastNotice = state.noticeSequence; if(state.notice != 0) error(getString(state.notice)) }
+            if(state.noticeSequence != lastNotice) { lastNotice = state.noticeSequence; if(state.notice != 0) { error(getString(state.notice)); if(externalView && state.track==null) emit(obj("incomingError" to "无法读取此音频，请从文件管理器重新打开并允许访问。")) } }
             val status = getString(state.subtitleStatus)
             if (status != lastSubtitleStatus) { lastSubtitleStatus = status; emit(obj("subtitleStatus" to status, "subtitleError" to if(state.subtitleStatus in listOf(R.string.himitsu_subtitle_error,R.string.himitsu_subtitle_version,R.string.himitsu_subtitle_time,R.string.himitsu_subtitle_ids,R.string.himitsu_subtitle_large)) status else "")) }
             emit(obj("manual" to (state.track?.let { store.manualUri(it.uri) != null } == true), "subtitleName" to state.subtitleName, "readingBusy" to state.readingBusy, "readingFailed" to state.readingFailed))
@@ -223,7 +277,7 @@ class PlayerV12Activity : AppCompatActivity() {
     }
 
     private fun startLibrary() {
-        if (started) return
+        if (started || externalView) return
         started = true
         component.musicServiceInteractor().prepare()
         component.storageScannerInteractor().runStorageObserver()
@@ -235,20 +289,28 @@ class PlayerV12Activity : AppCompatActivity() {
                     val location = locations[track.id]
                     track.id to compositionJson(track)
                         .put("folder", location?.folder ?: "local")
+                        .put("albumId",location?.albumId?.toString()).put("albumArtist",location?.albumArtist)
+                        .put("discNumber",location?.discNumber).put("trackNumber",location?.trackNumber)
                         .put("folderName", location?.folder?.substringAfterLast('/') ?: "本地音乐")
                         .put("fileName", location?.fileName ?: track.title)
                 }
-                Pair(items, mapped)
+                Triple(items, mapped, JSONArray(items.map { mapped.getValue(it.id) }).toString())
             }.subscribeOn(Schedulers.io()) }.observeOn(AndroidSchedulers.mainThread())
-            .subscribe({ (items,mapped) -> tracks.clear(); items.forEach { tracks[it.id]=it }; trackJson.clear(); trackJson.putAll(mapped)
-                emit(obj("tracks" to JSONArray(items.map { mapped.getValue(it.id) }), "libraryLoading" to false, "sourceError" to "")); publishQueue()
+             .subscribe({ (items,mapped,encoded) ->
+                tracks.clear(); items.forEach { tracks[it.id]=it }; trackJson.clear(); trackJson.putAll(mapped)
+                if(libraryJson!=encoded){
+                    libraryJson=encoded
+                    if(ready && !isDestroyed)web.evaluateJavascript("window.dlSoundEvent && window.dlSoundEvent({tracks:"+encoded+"});",null)
+                }
+                emit(obj("libraryLoading" to false, "sourceError" to "")); publishQueue()
             }, { emit(obj("libraryLoading" to false, "sourceError" to "音乐库读取失败，请重新授权或刷新")) }))
-        librarySubscriptions.add(playlistService.getPlaylistsObservable().switchMapSingle { lists ->
-            Single.fromCallable { JSONArray(lists.map { list ->
-                val entries = playlistService.getCompositionsObservable(list.id, null).firstOrError().blockingGet()
-                obj("id" to list.id.toString(), "name" to list.name, "trackIds" to JSONArray(entries.map { it.id.toString() }))
-            }) }.subscribeOn(Schedulers.io())
-        }.observeOn(AndroidSchedulers.mainThread()).subscribe({ emit(obj("playlists" to it)) }, { error("歌单读取失败") }))
+        librarySubscriptions.add(component.compositionsDao().observeLibraryPlaylistRows()
+            .observeOn(Schedulers.computation()).map { rows ->
+                JSONArray(rows.groupBy { it.listId }.map { (id,entries) ->
+                    obj("id" to id.toString(), "name" to entries.first().name,
+                        "trackIds" to JSONArray(entries.mapNotNull { it.audioId?.toString() }))
+                })
+            }.observeOn(AndroidSchedulers.mainThread()).subscribe({ emit(obj("playlists" to it)) }, { error("歌单读取失败") }))
     }
     private fun compositionJson(t: CompositionModel) = obj("id" to t.id.toString(), "title" to t.title, "artist" to (t.artist ?: "未知艺术家"), "album" to (t.album ?: "未知专辑"), "duration" to t.duration, "size" to t.size, "comment" to t.comment, "demo" to false, "folder" to "local", "cover" to "https://$HOST/cover/${t.id}?v=${t.coverModifyTime}")
     private fun publishQueue() {
@@ -257,17 +319,17 @@ class PlayerV12Activity : AppCompatActivity() {
     }
     private fun publishPreferences() {
         val mode = when(store.mode) { SubtitleMode.JAPANESE -> "ja"; SubtitleMode.CHINESE -> "zh"; else -> "both" }
-        emit(obj("prefs" to obj("theme" to preferences.getString("theme", "system"), "language" to mode, "ruby" to store.furigana, "font" to store.fontSize,
-            "rubyScale" to store.rubyScale, "depth" to store.depthEnabled, "speed" to player.getPlaybackSpeed(), "repeat" to when(player.getRepeatMode()) { 1 -> "all"; 2 -> "one"; else -> "off" }, "shuffle" to player.isRandomPlayingEnabled()),
+        emit(obj("prefs" to obj("theme" to store.theme, "language" to mode, "ruby" to store.furigana, "font" to store.fontSize,
+            "rubyScale" to store.rubyScale, "depth" to store.depthEnabled, "speed" to if(externalView) externalSpeed else player.getPlaybackSpeed(), "repeat" to when(player.getRepeatMode()) { 1 -> "all"; 2 -> "one"; else -> "off" }, "shuffle" to player.isRandomPlayingEnabled()),
             "favorites" to JSONArray(preferences.getStringSet("favorites", emptySet())!!.sorted())))
     }
-    private fun publishPermission() = emit(obj("mediaPermission" to Permissions.hasFilePermission(this), "treeGranted" to contentResolver.persistedUriPermissions.any { it.isReadPermission && android.provider.DocumentsContract.isTreeUri(it.uri) }))
+    private fun publishPermission() = emit(obj("mediaPermission" to Permissions.hasFilePermission(this), "videoOptional" to (Build.VERSION.SDK_INT>=33), "videoGranted" to (Build.VERSION.SDK_INT<33 || Permissions.hasPermission(this,Manifest.permission.READ_MEDIA_VIDEO)), "treeGranted" to contentResolver.persistedUriPermissions.any { it.isReadPermission && android.provider.DocumentsContract.isTreeUri(it.uri) }))
     private fun publishEnvironment() {
         val dark = resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK == Configuration.UI_MODE_NIGHT_YES
         emit(obj("appVersion" to appInfo.versionName, "buildCode" to appInfo.versionCode,
             "buildKind" to if (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0) "调试版" else "正式版",
             "fontScale" to resources.configuration.fontScale, "systemDark" to dark, "reducedMotion" to (Settings.Global.getFloat(contentResolver, Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f)))
-        val theme = preferences.getString("theme", "system")
+        val theme = store.theme
         val useDark = theme == "dark" || theme == "system" && dark
         WindowCompat.getInsetsController(window, web).apply { isAppearanceLightStatusBars = !useDark; isAppearanceLightNavigationBars = !useDark }
         (web.parent as? android.view.View)?.setBackgroundColor(Color.parseColor(if(useDark) "#151719" else "#ffffff"))
@@ -283,16 +345,21 @@ class PlayerV12Activity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 when(request.getString("action")) {
-                    "ready" -> { ready = true; web.evaluateJavascript("window.dlSoundEvent && window.dlSoundEvent(${snapshot});",null); publishEnvironment() }
+                    "ready" -> { ready = true; web.evaluateJavascript("window.dlSoundEvent && window.dlSoundEvent(Object.assign(${snapshot},{tracks:${libraryJson}}));",null); publishEnvironment() }
+                    "exportBackup", "importBackup" -> {
+                        require(started && !snapshot.optBoolean("libraryLoading",true) && !backupBusy) { "请先授权并等候曲库加载完成" }
+                        if(request.getString("action")=="exportBackup")saveBackup.launch("DL-Sound-backup.json") else openBackup.launch(arrayOf("application/json","text/plain","application/octet-stream"))
+                    }
                     "checkUpdate" -> {
                         val result = withContext(Dispatchers.IO) { ReleaseChannel.check(appInfo.versionName.orEmpty()) }
                         reply(id, value = result)
                         return@launch
                     }
                     "openRelease" -> startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(ReleaseChannel.page)))
-                    "toggle" -> player.playOrPause()
+                    "closeExternal" -> if(externalView) finish() else Unit
+                    "toggle" -> if(externalView) model.playPause() else player.playOrPause()
                     "pause" -> player.pause()
-                    "seek" -> player.onSeekFinished(data.getLong("ms").coerceIn(0, snapshot.optLong("duration").coerceAtLeast(0)))
+                    "seek" -> if(externalView) model.seek(data.getLong("ms")) else player.onSeekFinished(data.getLong("ms").coerceIn(0, snapshot.optLong("duration").coerceAtLeast(0)))
                     "play" -> {
                         val collection = data.getJSONArray("ids")
                         require(collection.length() <= PLAY_QUEUE_MAX_ITEMS_COUNT) { "队列最多可加入 ${PLAY_QUEUE_MAX_ITEMS_COUNT} 首音轨" }
@@ -320,7 +387,7 @@ class PlayerV12Activity : AppCompatActivity() {
                     "clear" -> { timer.cancelEndOfTrack(); player.clearPlayQueue().await() }
                     "pref" -> preference(data)
                     "offset" -> {
-                        val s = model.state.value; val t = requireNotNull(s.track); val d = requireNotNull(s.document)
+                        val s = model.state.value; val t = requireNotNull(s.track) { "音轨已变化，请重新打开字幕设置" }; val d = requireNotNull(s.document) { "当前音轨没有可校准的字幕" }
                         require(data.getString("key") == store.offsetKey(t.uri,d.fingerprint)) { "字幕已变化，请重新调整" }
                         store.setOffset(t.uri,d.fingerprint,data.getLong("value")); publishOffset()
                     }
@@ -331,26 +398,35 @@ class PlayerV12Activity : AppCompatActivity() {
                     "importSubtitle" -> { pickingTrack = requireNotNull(model.state.value.track) { "请先选择音轨" }.uri; subtitlePicker.launch(arrayOf("*/*")) }
                     "automatic" -> model.automaticSubtitle()
                     "requestTree" -> treePicker.launch(null)
-                    "requestMedia" -> if (Permissions.hasFilePermission(this@PlayerV12Activity) && (Build.VERSION.SDK_INT<33 || Permissions.hasPermission(this@PlayerV12Activity,Manifest.permission.READ_MEDIA_VIDEO))) { startLibrary(); publishPermission() } else mediaPermission.launch(arrayOf(Permissions.getFilePermissionName(), if(Build.VERSION.SDK_INT>=33) Manifest.permission.READ_MEDIA_VIDEO else Permissions.getFilePermissionName()))
+                    "requestMedia" -> requestAccess(Permissions.getFilePermissionName())
+                    "requestVideo" -> if(Build.VERSION.SDK_INT>=33) requestAccess(Manifest.permission.READ_MEDIA_VIDEO) else requestAccess(Permissions.getFilePermissionName())
                     "refresh" -> { librarySubscriptions.clear(); started=false; publishPermission(); if(Permissions.hasFilePermission(this@PlayerV12Activity)) startLibrary() }
                     "favorite" -> { val values = preferences.getStringSet("favorites",emptySet())!!.toMutableSet(); val value=data.getString("id"); if(!values.add(value)) values.remove(value); preferences.edit().putStringSet("favorites",values).apply(); publishPreferences() }
                     "playlist" -> playlistAction(data)
-                    "correction" -> showCorrection(data.optString("cueId"),data.optInt("index",-1))
+                    "correction" -> { require(data.optString("key") == snapshot.optString("offsetKey")) { "字幕已变化，请重新选择台词" }; showCorrection(data.optString("cueId"),data.optInt("index",-1)) }
                     else -> throw IllegalArgumentException("不支持的操作")
                 }
                 reply(id)
             } catch(e: Exception) { reply(id, e.message ?: "操作未完成，请重试") }
         }
     }
+    private fun requestAccess(permission: String) {
+        if (Permissions.hasPermission(this, permission)) { startLibrary(); publishPermission(); return }
+        if (preferences.getBoolean("asked-"+permission,false) && !shouldShowRequestPermissionRationale(permission)) {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,Uri.fromParts("package",packageName,null)))
+        } else {
+            mediaPermission.launch(arrayOf(permission))
+        }
+    }
     private fun preference(data: JSONObject) {
         when(data.getString("key")) {
-            "theme" -> { val v=data.getString("value"); require(v in listOf("light","dark","system")); preferences.edit().putString("theme",v).apply(); publishEnvironment() }
+            "theme" -> { val v=data.getString("value"); require(v in listOf("light","dark","system")); store.theme=v; publishEnvironment() }
             "language" -> model.mode(when(data.getString("value")) { "zh" -> SubtitleMode.CHINESE; "both" -> SubtitleMode.BILINGUAL; else -> SubtitleMode.JAPANESE })
             "ruby" -> model.furigana(data.getBoolean("value"))
             "font" -> model.font(data.getInt("value").coerceIn(16,40)-store.fontSize)
             "rubyScale" -> store.rubyScale=data.getDouble("value").toFloat()
             "depth" -> store.depthEnabled=data.getBoolean("value")
-            "speed" -> player.setPlaybackSpeed(data.getDouble("value").toFloat().coerceIn(.5f,2f))
+            "speed" -> data.getDouble("value").toFloat().coerceIn(.5f,2f).let { if(externalView) component.learningPlayerInteractor().setPlaybackSpeed(it) else player.setPlaybackSpeed(it) }
             "repeat" -> { timer.cancelEndOfTrack(); player.setRepeatMode(when(data.getString("value")){"one"->2;"all"->1;else->0}) }
             "shuffle" -> player.setRandomPlayingEnabled(data.getBoolean("value"))
         }; publishPreferences()
@@ -373,7 +449,7 @@ class PlayerV12Activity : AppCompatActivity() {
         }
     }
     private fun showCorrection(cueId: String, index: Int) {
-        val s=model.state.value; val document=s.document ?: return
+        val s=model.state.value; val document=requireNotNull(s.document) { "当前音轨没有可修正的字幕" }
         val position=s.position-(s.track?.let { store.offset(it.uri,document.fingerprint) } ?: 0)
         val cue = s.rendered.firstOrNull { rendered ->
             rendered.cue.kind == CueKind.DIALOGUE && if (cueId.isEmpty()) {
@@ -408,7 +484,7 @@ class PlayerV12Activity : AppCompatActivity() {
     }
     private fun dialogContext(): android.content.Context {
         val config = Configuration(resources.configuration)
-        when(preferences.getString("theme","system")) {
+        when(store.theme) {
             "dark" -> config.uiMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_YES
             "light" -> config.uiMode = (config.uiMode and Configuration.UI_MODE_NIGHT_MASK.inv()) or Configuration.UI_MODE_NIGHT_NO
         }

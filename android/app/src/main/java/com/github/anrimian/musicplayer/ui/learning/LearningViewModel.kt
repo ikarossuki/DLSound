@@ -48,7 +48,7 @@ internal data class LearningState(
     val noticeSequence: Int = 0,
 )
 
-internal class LearningViewModel(application: Application, private val libraryMode: Boolean = false) : AndroidViewModel(application) {
+internal class LearningViewModel(application: Application, private val libraryMode: Boolean = false, private val incoming: Boolean = false) : AndroidViewModel(application) {
     private val context = application.applicationContext
     private val store = LearningStore(context)
     private val files = SafLearningFiles(context)
@@ -77,7 +77,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
     }
 
     private fun restoreLearningPlayer() {
-        val lastUri = store.trackUri
+        val lastUri = store.trackUri.takeUnless { incoming }
         if (lastUri != null) mutable.update { it.copy(track = LearningFile(lastUri, store.trackName, false, audio = true), position = store.position(lastUri)) }
         LearningProgressRecorder.start(context, player)
         player.setExternalPlayerKeepInBackground(true)
@@ -105,6 +105,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
                 notice(R.string.himitsu_audio_error)
             }
         }, {}))
+        if (incoming) return
         store.treeUri?.let { tree ->
             val saved = store.browserStack.filter { runCatching { Uri.parse(it).authority == Uri.parse(tree).authority }.getOrDefault(false) }
             val root = runCatching { files.root(tree) }.getOrNull()
@@ -171,8 +172,28 @@ internal class LearningViewModel(application: Application, private val libraryMo
         }
     }
 
+    fun openIncoming(uri: Uri) {
+        worker.execute {
+            val result = runCatching { files.incomingFile(uri) }
+            main.post {
+                if (cleared) return@post
+                result.onSuccess { (file, parent) ->
+                    queue = listOf(file)
+                    selectTrack(file, true, parent)
+                }.onFailure { notice(R.string.himitsu_file_unavailable) }
+            }
+        }
+    }
+
     fun chooseTree(uri: Uri) {
         store.treeUri = uri.toString()
+        if (incoming) {
+            val track = mutable.value.track ?: return
+            val folder = files.root(uri.toString())
+            store.trackFolder = folder
+            loadSubtitle(track.uri, folder)
+            return
+        }
         if (libraryMode) {
             libraryTrackId?.let { loadLibraryTrack(it, mutable.value.track?.name.orEmpty()) }
             return
@@ -220,7 +241,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
         }
     }
 
-    private fun selectTrack(file: LearningFile, autoPlay: Boolean, folder: String) {
+    private fun selectTrack(file: LearningFile, autoPlay: Boolean, folder: String?) {
         if (mutable.value.openingAudio) return
         savePosition()
         if (store.checkFileVersion(file) && attachedPlayerUri == file.uri) attachedPlayerUri = null
@@ -243,7 +264,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
         val track = mutable.value.track ?: return
         if (mutable.value.openingAudio) return
         if (attachedPlayerUri == track.uri) player.playOrPause()
-        else store.trackFolder?.let { selectTrack(track, true, it) }
+        else selectTrack(track, true, store.trackFolder)
     }
 
     fun previous() = skip(-1)
@@ -322,6 +343,9 @@ internal class LearningViewModel(application: Application, private val libraryMo
         return document
     }
 
+    fun reloadSubtitle() {
+        mutable.value.track?.let { loadSubtitle(it.uri,if(libraryMode) libraryFolder else store.trackFolder) }
+    }
     fun automaticSubtitle() {
         val track = mutable.value.track ?: return
         manualSelections[track.uri] = (manualSelections[track.uri] ?: 0) + 1
