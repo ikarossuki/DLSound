@@ -23,7 +23,7 @@ internal data class NativeRow(
     val extraIcon: Int = 0, val extraLabel: String = "", val active: Boolean = false,
     val extra: (() -> Unit)? = null, val trackId:String = "", val identity:String = "",
     val number: Int = 0, val chevron: Boolean = false, val profile: Boolean = false,
-    val artwork: org.json.JSONObject? = null, val open: () -> Unit = {}
+    val artwork: org.json.JSONObject? = null, val titleLines: Int = 1, val open: () -> Unit = {}
 )
 
 internal open class NativeWidgets(val host: PlayerV12Activity) {
@@ -299,6 +299,8 @@ internal class NativeRows(private val ui: NativeWidgets) : RecyclerView.Adapter<
         })
         holder.main.setPadding(0, dp(if (row.profile) 8 else 5), 0, dp(if (row.profile) 8 else 5))
         holder.name.text = row.title
+        holder.name.isSingleLine = row.titleLines == 1
+        holder.name.maxLines = row.titleLines
         holder.name.textSize = if (queue) 13f else 15f
         holder.name.setTextColor(if (row.active) green else ink)
         holder.detail.text = row.detail

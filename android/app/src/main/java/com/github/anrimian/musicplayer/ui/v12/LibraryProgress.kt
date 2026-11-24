@@ -51,7 +51,7 @@ internal class LibraryProgress(private val store: LearningStore, private val dao
         return JSONArray(newest(records).map(Record::json))
     }
 
-    fun restore(incoming: List<Record>) {
+    fun restore(incoming: List<Record>, choices: Map<Triple<String,Long,Long>, Long> = emptyMap()) {
         val roots = works()
         val pending = JSONArray()
         val missingRoots = mutableSetOf<String>()
@@ -67,13 +67,14 @@ internal class LibraryProgress(private val store: LearningStore, private val dao
                     possible.singleOrNull { record.root.isNotEmpty() && path(it.value).endsWith(suffix) }
                         ?: possible.singleOrNull()?.takeUnless { record.duplicate }
                 }
-            if (match == null) {
+            val id = choices[Triple(record.path, record.size, record.duration)] ?: match?.key
+            if (id == null) {
                 pending.put(record.json())
                 if (record.root.isNotEmpty() && record.root !in roots) missingRoots += record.root
             } else {
-                val duration = match.value.getLong("duration")
+                val duration = tracks.getValue(id).getLong("duration")
                 val ms = if (duration > 0 && record.position >= duration) 0L else record.position
-                mapped += FilePositionEntity(match.key, ms, record.heard)
+                mapped += FilePositionEntity(id, ms, record.heard)
             }
         }
         dao.restorePositions(mapped)

@@ -27,6 +27,8 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
     val library=NativeLibrary(this,saved)
     val player=NativePlayback(this,saved)
     val settings=NativeSettings(this)
+    val dialogueSearch=NativeDialogueSearch(this,saved)
+    private val restoreReview=NativeRestoreReview(this,saved)
     val study=NativeStudy(this,saved)
     val works=NativeWorks(this,saved)
     private val pages=mutableListOf<NativePage>()
@@ -37,6 +39,7 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
     lateinit var body:LinearLayout
     private var sheet: android.app.Dialog? = null
     private var sheetTitle: TextView? = null
+    private var renderedPage: NativePage? = null
     private val sheetRoutes = setOf("queue", "practice", "track", "display")
     private var pending=false
     private var disposed=false
@@ -61,6 +64,8 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
         out.putStringArrayList("native.keys",ArrayList(pages.map { it.key }))
         out.putBundle("native.scroll",Bundle().apply { positions.forEach { (key,pos)->putIntArray(key,intArrayOf(pos.first,pos.second)) } })
         library.save(out); player.save(out); study.save(out); works.save(out)
+        dialogueSearch.save(out)
+        restoreReview.save(out)
     }
     fun act(name:String,vararg data:Pair<String,Any?>) = host.action(name,json(*data))
     fun pref(key:String,value:Any) = act("pref","key" to key,"value" to value)
@@ -78,6 +83,11 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
         player.tab = tab
         if (route.name != "player") go("player") else if (tabChanged) schedule()
     }
+    fun returnToLyrics() {
+        while (pages.size > 1 && route.name != "player") pages.removeAt(pages.lastIndex)
+        player.tab = "lyrics"
+        if (route.name == "player") render() else go("player")
+    }
     fun play(tracks:List<JSONObject>,index:Int=0,at:Long?=null) {
         if(index !in tracks.indices) return
         host.playTracks(tracks.map { it.getLong("id") },index,at){openPlayer()}
@@ -91,9 +101,9 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
         if(disposed) return
         if(route.name=="queue") { library.updateQueue(); return }
         if(route.name=="library") library.updateActive()
-        if(changedTrack && route.name in setOf("player","track","practice")) schedule()
+        if(changedTrack && route.name in setOf("player","track","practice","lyricSearch")) schedule()
         val track=transport.current
-        val canMini=route.name !in setOf("player","queue","practice") && (!external || route.name=="external")
+        val canMini=route.name !in pagesWithoutMini && (!external || route.name=="external")
         if(canMini && (track!=null)!=(miniOpen!=null)) { schedule();return }
         if(changedTrack && canMini && track!=null) {
             miniTitle?.text=track.title;miniArtist?.text=track.artist;miniOpen?.contentDescription=track.title+"，"+track.artist
@@ -112,6 +122,8 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
         val chrome = structural.any { it in setOf("prefs", "systemDark", "fontScale") }
         if (!chrome) when (route.name) {
             "queue" -> return
+            "lyricSearch" -> if ("document" !in structural) return
+            "restoreReview", "restoreTrack" -> if (host.restoreSession != null || structural.none { it in setOf("tracks", "libraryLoading", "sourceError") }) return
             "player" -> if (structural.none { it in playerFields }) return
             "library" -> {
                 if (library.section == "me") {
@@ -124,12 +136,12 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
                     }
                 }
             }
-            "external" -> if (structural.none { it.startsWith("folder") || it == "incomingError" }) return
+            "external" -> if (structural.none { it.startsWith("folder") }) return
         }
         schedule()
     }
     fun schedule() { if(!pending && !disposed) { pending=true; root.post(renderTask) } }
-    fun dispose() { disposed=true; dismissSheet(); root.removeCallbacks(renderTask); covers.evictAll() }
+    fun dispose() { disposed=true; dialogueSearch.detach(); dismissSheet(); root.removeCallbacks(renderTask); covers.evictAll() }
     private fun rememberList() {
         val manager=list?.layoutManager as? LinearLayoutManager ?: return
         val first=manager.findFirstVisibleItemPosition()
@@ -138,11 +150,13 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
     fun render() {
         if(disposed) return
         root.removeCallbacks(renderTask); pending=false
+        dialogueSearch.detach()
         if (route.name in sheetRoutes && pages.size > 1) {
             renderSheet()
             return
         }
         dismissSheet()
+        renderedPage = route
         rememberList(); list=null; player.clearViews(); study.clearViews(); miniProgress=null; miniToggle=null; miniTitle=null;miniArtist=null;miniCover=null;miniOpen=null;library.clearViews()
         root.removeAllViews(); root.setBackgroundColor(paper)
         body=column(); root.addView(body,lp(-1,0,1f))
@@ -150,12 +164,14 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
             "library" -> library.show()
             "external" -> library.external()
             "player" -> player.show()
+            "lyricSearch" -> dialogueSearch.show()
+            "restoreReview", "restoreTrack" -> restoreReview.show()
             "queue" -> library.showQueue()
             "works","work" -> works.show()
             "practice","marks" -> study.show()
             else -> settings.show(route.name)
         }
-        if(route.name !in setOf("player","queue","practice") && !external && current!=null) mini()
+        if(route.name !in pagesWithoutMini && !external && current!=null) mini()
         if(route.name=="external" && current!=null) mini()
         if(!external && (route.name=="library" || route.name in profilePages)) navigation()
     }
@@ -167,7 +183,7 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
 
     private fun renderSheet() {
         val page = route
-        if (root.childCount == 0) {
+        if (root.childCount == 0 || renderedPage != pages.lastOrNull { it.name !in sheetRoutes }) {
             pages.removeAt(pages.lastIndex)
             render()
             pages.add(page)
@@ -287,11 +303,12 @@ internal class NativePlayerScreen(host:PlayerV12Activity,val root:LinearLayout,s
         root.addView(nav,lp())
     }
     companion object {
+        private val pagesWithoutMini=setOf("player","queue","practice","lyricSearch","restoreReview","restoreTrack")
         val sections=listOf(Triple("folders","文件夹",R.drawable.dls_folder),Triple("albums","专辑",R.drawable.dls_disc),
             Triple("artists","音乐人",R.drawable.dls_headphones),Triple("playlists","歌单",R.drawable.dls_queue),
             Triple("me","我的",R.drawable.dls_person))
         private val profilePages=setOf("settings","about","playback","subtitles","appearance","files","marks","licenses","notices","license")
-        private val playerFields = setOf("cues", "subtitleStatus", "subtitleName", "subtitleError", "readingBusy", "readingFailed", "offset", "incomingError")
+        private val playerFields = setOf("cues", "subtitleStatus", "subtitleName", "readingBusy", "readingFailed", "offset", "audioState")
         private val libraryFields = setOf("tracks", "playlists", "favorites", "mediaPermission", "libraryLoading", "sourceError", "browserRevision")
         private val anyClock=setOf("time","duration","playing","loading","sleep","listenRange")
     }

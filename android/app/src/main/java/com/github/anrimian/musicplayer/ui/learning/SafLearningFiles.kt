@@ -24,7 +24,8 @@ internal class SafLearningFiles(private val context: Context) {
     fun list(folder: String): List<LearningFile> {
         val uri = Uri.parse(folder)
         if (uri.scheme == "file") {
-            return File(requireNotNull(uri.path)).listFiles().orEmpty().map { file ->
+            val entries = File(requireNotNull(uri.path)).listFiles() ?: throw java.io.IOException("directory_unavailable")
+            return entries.map { file ->
                 LearningFile(Uri.fromFile(file).toString(), file.name, file.isDirectory, file.length(), file.lastModified())
             }
         }

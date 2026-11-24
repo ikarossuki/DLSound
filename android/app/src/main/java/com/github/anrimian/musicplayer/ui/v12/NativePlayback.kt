@@ -115,7 +115,7 @@ internal class NativePlayback(private val ui:NativePlayerScreen,saved:Bundle?) {
             else -> {
                 val model=host.learning
                 val hasLines=model.rendered.any { it.cue.kind==CueKind.DIALOGUE }
-                if(hasLines && state.text("subtitleError").isEmpty()) {
+                if(hasLines && !model.audioFailed && !host.libraryAudioFailed) {
                     scenes=model.rendered.filter { it.cue.kind==CueKind.SCENE }
                     scene=label("",13,muted).apply { gravity=Gravity.CENTER; page.addView(this,lp()) }
                     val style=LyricStyle(prefs.text("language","ja"),prefs.optBoolean("ruby",true),
@@ -126,16 +126,26 @@ internal class NativePlayback(private val ui:NativePlayerScreen,saved:Bundle?) {
                         {r->host.correctReading(state.text("offsetKey"),r.cue.id)})
                     page.addView(lyrics,lp(-1,0,1f))
                 } else {
-                    page.gravity=Gravity.CENTER
-                    val title=when { state.text("incomingError").isNotBlank()->"无法打开音频"; state.text("subtitleError").isNotBlank()->"字幕暂时无法读取"
-                        state.optBoolean("subtitleFolderNeeded")->"允许读取同名字幕";else->"这首音轨还没有字幕" }
-                    page.addView(label(title,18,bold=true).apply { gravity=Gravity.CENTER },lp())
-                    textBlock(page,state.text("incomingError").ifEmpty {state.text("subtitleStatus")})
-                    page.addView(button(if(state.optBoolean("treeGranted")) "重选字幕目录" else "授权当前音乐文件夹",{act("requestTree")}))
-                    page.addView(button("选择字幕",{host.selectSubtitle()}));page.addView(button("分别选择日文和中文",{host.selectPair()}))
+                    val message = LyricPlaceholder.forState(model, host.libraryAudioFailed)
+                    val scroll = ScrollView(host).apply { isFillViewport = true }
+                    val block = column().apply { gravity = Gravity.CENTER; setPadding(dp(24),dp(12),dp(24),dp(12)) }
+                    block.addView(label(message.title,18,bold=true).apply { gravity=Gravity.CENTER },lp())
+                    if (message.detail.isNotBlank()) block.addView(label(message.detail,14,muted).apply {
+                        gravity=Gravity.CENTER; setPadding(0,dp(8),0,dp(12))
+                    },lp())
+                    when (message.action) {
+                        LyricRecovery.DIRECTORY -> block.addView(button("授权当前音乐文件夹", host::requestSubtitleDirectory, true),lp(-2,-2))
+                        LyricRecovery.SUBTITLE -> block.addView(button(if (model.subtitleStatus == R.string.himitsu_subtitle_missing) "选择字幕" else "重新选择字幕", host::selectSubtitle, true),lp(-2,-2))
+                        LyricRecovery.AUDIO -> block.addView(button("重新选择音频", {
+                            if (folderPlayer) { if (!back()) host.finish() }
+                            else if (external) host.chooseIncomingAudio() else selectSection("folders")
+                        }, true),lp(-2,-2))
+                        null -> Unit
+                    }
+                    scroll.addView(block); page.addView(scroll,lp(-1,0,1f))
                 }
-                if(state.optBoolean("readingBusy")) textBlock(page,"读音生成中")
-                if(state.optBoolean("readingFailed")) page.addView(button("自动读音失败，点此重试",{pref("ruby",true)}))
+                if(hasLines && state.optBoolean("readingBusy")) textBlock(page,"读音生成中")
+                if(hasLines && state.optBoolean("readingFailed")) page.addView(button("自动读音失败，点此重试",{pref("ruby",true)}))
             }
         }
         seek=slider("播放进度",{ drag,ms->dragging=drag; elapsed?.text=clock(ms) }) { ms->host.seekTo(ms) }

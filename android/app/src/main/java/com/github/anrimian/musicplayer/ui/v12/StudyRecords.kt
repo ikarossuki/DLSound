@@ -102,7 +102,8 @@ internal class StudyRecords(context: Context) {
             for (i in 0 until array.length()) validate(collection, array.getJSONObject(i))
         }
     }
-    fun merge(doc: JSONObject, trackPaths: Map<String,String>) = synchronized(lock) {
+    fun merge(doc: JSONObject, trackPaths: Map<String,String>, pendingPaths: Set<String> = emptySet(),
+              chosenPaths: Set<String> = emptySet()) = synchronized(lock) {
         val edit = prefs.edit()
         val works = rows("works").associateBy { it.optString("origin", it.getString("key")) }
         val imported = doc.getJSONArray("works")
@@ -120,9 +121,10 @@ internal class StudyRecords(context: Context) {
             val id = "bookmarks/" + row.getString("key")
             if (prefs.contains(id)) continue
             val source = row.getString("source")
+            if (source in pendingPaths) continue
             val root = roots.keys.filter { source.startsWith(it + "/") }.maxByOrNull { it.length }
-            if (root == null) trackPaths[source]?.let { row.put("source", it) }
-            else {
+            if (source in trackPaths && (root == null || source in chosenPaths)) row.put("source", trackPaths.getValue(source))
+            else if (root != null) {
                 works[roots[root]]?.let { row.put("source", it.getString("key") + source.removePrefix(root)) }
             }
             edit.putString(id, row.toString())

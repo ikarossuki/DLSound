@@ -8,9 +8,9 @@ object Constants {
     const val SYNC_VERSION_CODE = 226
     const val SYNC_VERSION_CODE_LEGACY = SYNC_VERSION_CODE - 1
 
-    const val LITE_VERSION_NAME = "1.4.3"
+    const val LITE_VERSION_NAME = "1.4.4"
     /**Even numbers only, increase only by 2*/
-    const val LITE_VERSION_CODE = 38
+    const val LITE_VERSION_CODE = 40
     const val LITE_VERSION_CODE_LEGACY = LITE_VERSION_CODE - 1
 
     const val SYNC_PACKAGE_NAME = "com.github.anrimian.musicplayer"

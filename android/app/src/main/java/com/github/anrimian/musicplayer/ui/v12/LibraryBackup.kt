@@ -34,7 +34,7 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
             .put("folderProgress",store.folderPositions.export()).put("progress",progress.export(live)).put("study",store.study.export()).put("playlists",lists).put("preferences",prefs).put("readings",store.backupReadings())
     }
 
-    data class Result(val favorites:Set<String>,val preferences:JSONObject,val missing:List<String>)
+    data class Result(val favorites:Set<String>,val preferences:JSONObject,val missing:List<String>,val deferredLists:List<String>)
     companion object {
         fun folderPath(row:JSONObject):String {
             val path = "/" + row.optString("folder").trim('/')
@@ -62,39 +62,70 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
         }
     }
 
-    suspend fun restore(doc:JSONObject):Result {
+    fun validateDraft(doc: JSONObject) {
+        validatePreferences(doc.getJSONObject("preferences"))
+        val catalog = doc.getJSONObject("tracks")
+        val readings = doc.getJSONObject("readings")
+        for (key in catalog.keys()) store.validateOrigins(readings, catalog.getJSONObject(key).getJSONArray("origins"))
+        store.prepareReadings(readings, emptyMap())
+        doc.getJSONArray("favorites")
+        val lists = doc.getJSONArray("playlists")
+        for (i in 0 until lists.length()) {
+            val list = lists.getJSONObject(i)
+            require(list.getString("name").isNotBlank()) { "歌单名称无效" }
+            val members = list.getJSONArray("members")
+            for (j in 0 until members.length()) members.getString(j)
+        }
+        if (doc.has("folderProgress")) com.github.anrimian.musicplayer.ui.learning.FolderPositions.read(doc.getJSONArray("folderProgress"))
+        if (doc.has("progress")) LibraryProgress.read(doc.getJSONArray("progress"))
+        if (doc.has("study")) store.study.check(doc.getJSONObject("study"))
+    }
+    suspend fun restore(doc:JSONObject, choices:Map<String,String> = emptyMap()):Result {
         require(doc.optString("format")=="DLSound/1") { "无法识别此备份版本" }
         val folderProgress = if (doc.has("folderProgress")) com.github.anrimian.musicplayer.ui.learning.FolderPositions.read(doc.getJSONArray("folderProgress")) else null
         val incomingProgress = if (doc.has("progress")) LibraryProgress.read(doc.getJSONArray("progress")) else null
         val study = if (doc.has("study")) doc.getJSONObject("study").also(store.study::check) else null
         val trackPaths = mutableMapOf<String,String>()
-        val byFile=rows.entries.groupBy { it.value.getString("fileName") to it.value.getLong("size") }
+        val matches=BackupMatches(doc, rows, choices)
+        val chosenPaths=mutableMapOf<Triple<String,Long,Long>,Long>()
         val catalog=doc.getJSONObject("tracks")
         val sources=uris()
         val aliases=mutableMapOf<String,JSONArray>()
         val missing=linkedSetOf<String>()
         val mapped=mutableMapOf<String,Long>()
-        for(old in catalog.keys()){
-            val row=catalog.getJSONObject(old)
-            val key=row.getString("identity")
-            val fields=JSONArray(key)
-            val matches=byFile[fields.getString(0) to fields.getLong(1)]?.filter { kotlin.math.abs(it.value.getLong("duration")-fields.getLong(2))<=1000 }
-            val id=(matches?.singleOrNull { path(it.value) == row.optString("path") } ?: matches?.singleOrNull())?.key
-            val origins = row.getJSONArray("origins")
+        for(match in matches.tracks){
+            val old=match.key
+            val row=catalog.optJSONObject(old)
+            val origins = row?.getJSONArray("origins") ?: JSONArray()
             store.validateOrigins(doc.getJSONObject("readings"), origins)
-            if(id==null){missing.add(fields.getString(0)+if(matches.isNullOrEmpty()) "（未找到）" else "（有多个匹配）");continue}
-            if (row.has("path")) trackPaths[row.getString("path")] = path(rows.getValue(id))
+            val target=match.resolved
+            if(target==null){missing.add(old);continue}
+            val id=target.id
+            if (match.path.isNotEmpty()) {
+                trackPaths[match.path] = target.path
+                if (match.chosen != null && row != null) {
+                    val original = JSONArray(row.getString("identity"))
+                    chosenPaths[Triple(match.path, original.getLong(1), original.getLong(2))] = id
+                }
+            }
             mapped[old]=id
-            sources[id]?.let { aliases[it]=origins }
+            sources[id]?.let { source ->
+                val group = aliases.getOrPut(source) { JSONArray() }
+                for (i in 0 until origins.length()) group.put(origins.get(i))
+            }
         }
         fun ids(array:JSONArray)=(0 until array.length()).mapNotNull { mapped[array.getString(it)] }
         val prefs=doc.getJSONObject("preferences").also(::validatePreferences)
         val favorites=ids(doc.getJSONArray("favorites")).map(Long::toString).toSet()
         val lists=doc.getJSONArray("playlists")
-        val planned=(0 until lists.length()).map { lists.getJSONObject(it) }.map { list ->
+        val deferred=mutableListOf<String>()
+        val planned=(0 until lists.length()).map { lists.getJSONObject(it) }.mapNotNull { list ->
             val name=list.getString("name")
             require(name.isNotBlank()) { "歌单名称无效" }
-            name to ids(list.getJSONArray("members"))
+            val members=list.getJSONArray("members")
+            val keys=(0 until members.length()).map { members.getString(it) }
+            if(keys.any { it !in mapped }) { deferred+=name; null }
+            else name to keys.map(mapped::getValue)
         }
         val readingEdit = store.prepareReadings(doc.getJSONObject("readings"),aliases)
         val existing=playlists.getPlaylistsObservable().firstOrError().await().associateBy { it.name }.toMutableMap()
@@ -119,8 +150,8 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
                     suffix++
                 }
             }
-            study?.let { store.study.merge(it,trackPaths) }
-            if (incomingProgress != null) progress.restore(incomingProgress)
+            study?.let { store.study.merge(it, trackPaths, matches.unresolved.map { it.path }.toSet(), chosenPaths.keys.map { it.first }.toSet()) }
+            if (incomingProgress != null) progress.restore(incomingProgress, chosenPaths)
             if (folderProgress != null) store.folderPositions.merge(folderProgress)
             readingEdit.apply()
         } catch (error: Exception) {
@@ -135,6 +166,6 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
             if (error.suppressed.isNotEmpty()) throw IllegalStateException("部分歌单未能撤销，请检查导入的歌单", error)
             throw error
         }
-        return Result(favorites,prefs,missing.toList())
+        return Result(favorites,prefs,missing.toList(),deferred)
     }
 }

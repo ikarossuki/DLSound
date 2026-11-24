@@ -37,6 +37,7 @@ internal data class LearningState(
     val duration: Long = 0,
     val playing: Boolean = false,
     val openingAudio: Boolean = false,
+    val audioFailed: Boolean = false,
     val mode: SubtitleMode = SubtitleMode.JAPANESE,
     val furigana: Boolean = true,
     val fontSize: Int = 23,
@@ -61,6 +62,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
     private val main = Handler(Looper.getMainLooper())
     private val generation = AtomicInteger()
     private val folderGeneration = AtomicInteger()
+    private var incomingRequest = 0
     private var folderStack = mutableListOf<String>()
     private var queue = emptyList<LearningFile>()
     private var queueIndex = -1
@@ -101,7 +103,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
             val source = value.value as? ExternalCompositionSource
             attachedPlayerUri = source?.uri?.toString()
             if (attachedPlayerUri == mutable.value.track?.uri && source != null) {
-                mutable.update { it.copy(duration = source.duration.coerceAtLeast(0), openingAudio = false) }
+                mutable.update { it.copy(duration = source.duration.coerceAtLeast(0), openingAudio = false, audioFailed = false) }
                 if (source.duration > 0 && store.position(attachedPlayerUri!!) >= source.duration) {
                     player.onSeekFinished(0)
                     store.savePosition(attachedPlayerUri!!, 0)
@@ -114,8 +116,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
         subscriptions.add(player.getPlayerStateObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({ playerState ->
             if (playerState is PlayerState.Error) {
                 attachedPlayerUri = null
-                mutable.update { it.copy(openingAudio = false, playing = false) }
-                notice(R.string.himitsu_audio_error)
+                failedAudio(R.string.himitsu_audio_error)
             }
         }, {}))
         if (folderSession) {
@@ -153,7 +154,8 @@ internal class LearningViewModel(application: Application, private val libraryMo
                     libraryTrackId = track?.id
                     generation.incrementAndGet()
                     libraryFolder = null
-                    mutable.update { it.copy(track = null, document = null, rendered = emptyList(),
+                    mutable.update { it.copy(track = null, document = null, rendered = emptyList(), audioFailed = false,
+                        subtitleName = "", subtitleStatus = if (track == null) R.string.himitsu_no_track else R.string.himitsu_subtitle_loading,
                         revision = it.revision + 1, position = 0, duration = track?.duration ?: 0) }
                     if (track != null) loadLibraryTrack(track.id, track.title)
                 }
@@ -181,20 +183,25 @@ internal class LearningViewModel(application: Application, private val libraryMo
                     libraryFolder = folder
                     mutable.update { it.copy(track = track) }
                     loadSubtitle(track.uri, folder)
-                }.onFailure { notice(R.string.himitsu_file_unavailable) }
+                }.onFailure { failedAudio(R.string.himitsu_file_unavailable) }
             }
         }
     }
 
     fun openIncoming(uri: Uri) {
+        val request = ++incomingRequest
+        savePosition()
+        mutable.update { it.copy(track = null, document = null, rendered = emptyList(), openingAudio = true,
+            audioFailed = false, playing = false, subtitleName = "", subtitleStatus = R.string.himitsu_subtitle_loading) }
         worker.execute {
             val result = runCatching { files.incomingFile(uri) }
             main.post {
-                if (cleared) return@post
+                if (cleared || request != incomingRequest) return@post
+                mutable.update { it.copy(openingAudio = false) }
                 result.onSuccess { (file, parent) ->
                     queue = listOf(file)
                     selectTrack(file, true, parent)
-                }.onFailure { notice(R.string.himitsu_file_unavailable) }
+                }.onFailure { failedAudio(R.string.himitsu_file_unavailable) }
             }
         }
     }
@@ -283,13 +290,13 @@ internal class LearningViewModel(application: Application, private val libraryMo
         if (store.checkFileVersion(file, restoredIdentity) && attachedPlayerUri == file.uri) attachedPlayerUri = null
         val initial = store.position(file.uri)
         mutable.update { it.copy(track = file, position = initial, duration = if (attachedPlayerUri == file.uri) it.duration else 0,
-            readerPage = true, openingAudio = attachedPlayerUri != file.uri) }
+            readerPage = true, audioFailed = false, openingAudio = attachedPlayerUri != file.uri) }
         loadSubtitle(file.uri, folder)
         if (attachedPlayerUri != file.uri) {
             subscriptions.add(player.startPlaying(UriFileReference(Uri.parse(file.uri), false), initial, autoPlay)
                 .subscribeOn(Schedulers.io()).observeOn(AndroidSchedulers.mainThread()).subscribe({
-                    mutable.update { it.copy(openingAudio = false) }
-                }, { mutable.update { it.copy(openingAudio = false, playing = false) }; notice(R.string.himitsu_audio_error) }))
+                    if (mutable.value.track?.uri == file.uri) mutable.update { it.copy(openingAudio = false) }
+                }, { if (mutable.value.track?.uri == file.uri) failedAudio(R.string.himitsu_audio_error) }))
         } else if (autoPlay && !mutable.value.playing) player.play(0)
     }
 
@@ -332,6 +339,9 @@ internal class LearningViewModel(application: Application, private val libraryMo
             seek(it.startMs + store.offset(track.uri, fingerprint))
         }
     }
+    fun ownsSubtitle(audioId: String): Boolean =
+        if (libraryMode) libraryTrackId?.toString() == audioId && mutable.value.track != null
+        else attachedPlayerUri == audioId && mutable.value.track?.uri == audioId
 
     fun page(reader: Boolean) { mutable.update { it.copy(readerPage = reader) } }
     fun mode(mode: SubtitleMode) { store.mode = mode; mutable.update { it.copy(mode = mode) } }
@@ -451,12 +461,14 @@ internal class LearningViewModel(application: Application, private val libraryMo
             val pair = store.pairBinding("track",trackUri)
             var retiredManual = false
             var retiredPair = false
+            var attemptedName = ""
             val result = runCatching {
                 fun manualSelection(): Triple<SubtitleDocument, Int, String>? {
                     if (pair != null) {
                         if (SubtitleFiles.retiredName(pair.optString(2)) || SubtitleFiles.retiredName(pair.optString(3))) {
                             retiredPair = true
                         } else try {
+                            attemptedName = pair.getString(2) + " / " + pair.getString(3)
                             return Triple(readPair(pair.getString(0),pair.getString(1)),R.string.himitsu_subtitle_manual,
                                 pair.getString(2)+" / "+pair.getString(3))
                         } catch (e:SubtitleFormatException) {
@@ -470,18 +482,15 @@ internal class LearningViewModel(application: Application, private val libraryMo
                         ?: uri.lastPathSegment?.substringAfterLast('/').orEmpty()
                     if (validated != null) return Triple(validated, R.string.himitsu_subtitle_manual, name)
                     val cached=store.manualFile(trackUri)
+                    attemptedName = name
                     if (SubtitleFiles.retiredName(Uri.parse(manualUri).lastPathSegment)) { retiredManual=true;return null }
                     try {
-                        val content=runCatching { files.text(manualUri) }.getOrNull()
-                        val fresh=content?.let { raw ->
-                            try { raw to decodeManualSubtitle(raw) }
-                            catch(e:SubtitleFormatException) { if(e.problem=="retired") throw e else null }
-                            catch(e:Exception) { null }
-                        }
-                        val parsed=fresh?.second ?: if(cached.isFile) decodeManualSubtitle(cached.inputStream().use(SafLearningFiles::readText)) else return null
-                        if(fresh!=null) {
+                        val fresh=runCatching { files.text(manualUri).let { raw -> raw to decodeManualSubtitle(raw) } }
+                        fresh.exceptionOrNull()?.let { if (it is SubtitleFormatException && it.problem=="retired") throw it }
+                        val parsed=fresh.getOrNull()?.second ?: if(cached.isFile) decodeManualSubtitle(cached.inputStream().use(SafLearningFiles::readText)) else fresh.getOrThrow().second
+                        fresh.getOrNull()?.let { valid ->
                             val temp=File(cached.path+".tmp")
-                            temp.writeText(fresh.first,Charsets.UTF_8)
+                            temp.writeText(valid.first,Charsets.UTF_8)
                             if(!temp.renameTo(cached)) temp.delete()
                         }
                         return Triple(parsed, R.string.himitsu_subtitle_manual, name)
@@ -493,13 +502,15 @@ internal class LearningViewModel(application: Application, private val libraryMo
                 }
                 manualSelection() ?: run {
                     val name = mutable.value.track?.takeIf { it.uri == trackUri }?.name ?: store.trackName
-                    val listing = if (folder != null) files.list(folder) else emptyList()
-                    val sidecar = SubtitleFiles.match(name, listing)
+                    val listing = if (folder != null) runCatching { files.list(folder) } else null
+                    val available = listing?.getOrNull().orEmpty()
+                    val sidecar = SubtitleFiles.match(name, available)
                     val rule = folder?.let { store.pairBinding("folder",it) }?.let { listOf(it.getString(0),it.getString(1)) }
-                    val paired = rule?.let { SubtitlePair.match(name,listing,it) }
-                        ?: if (sidecar == null) SubtitlePair.match(name,listing) else null
+                    val paired = rule?.let { SubtitlePair.match(name,available,it) }
+                        ?: if (sidecar == null) SubtitlePair.match(name,available) else null
                     if (paired != null) {
                         val (ja,zh) = paired
+                        attemptedName = ja.name + " / " + zh.name
                         Triple(readPair(ja.uri,zh.uri), R.string.himitsu_subtitle_auto, ja.name + " / " + zh.name)
                     } else if (sidecar == null) {
                         val embedded = if (libraryMode) runCatching {
@@ -507,7 +518,7 @@ internal class LearningViewModel(application: Application, private val libraryMo
                                 .timeout(3, java.util.concurrent.TimeUnit.SECONDS).blockingGet().value
                         }.getOrNull() else null
                         if (embedded.isNullOrBlank()) {
-                            val status = if (files.needsTreeForSidecars(folder)) R.string.himitsu_subtitle_folder_needed
+                            val status = if (listing?.isFailure == true || files.needsTreeForSidecars(folder)) R.string.himitsu_subtitle_folder_needed
                                 else R.string.himitsu_subtitle_missing
                             Triple(null, status, "")
                         }
@@ -519,7 +530,10 @@ internal class LearningViewModel(application: Application, private val libraryMo
                             Triple(document, R.string.himitsu_subtitle_auto, "文件内歌词")
                         }
                     }
-                    else Triple(SubtitleFiles.decode(files.text(sidecar.uri), sidecar.name), R.string.himitsu_subtitle_auto, sidecar.name)
+                    else {
+                        attemptedName = sidecar.name
+                        Triple(SubtitleFiles.decode(files.text(sidecar.uri), sidecar.name), R.string.himitsu_subtitle_auto, sidecar.name)
+                    }
                 }
             }
             main.post {
@@ -527,10 +541,10 @@ internal class LearningViewModel(application: Application, private val libraryMo
                 if (retiredManual && store.manualUri(trackUri)==manualUri) store.setManualUri(trackUri,null)
                 if (retiredPair && store.pairBinding("track",trackUri)?.toString()==pair?.toString()) store.setPairBinding("track",trackUri,null)
                 result.onSuccess { (document, status, name) ->
-                    mutable.update { it.copy(document = document, subtitleStatus = if (document != null && document.cues.isEmpty()) R.string.himitsu_subtitle_empty else status, subtitleName = name) }
+                    mutable.update { it.copy(document = document, subtitleStatus = if (document != null && document.cues.none { cue -> cue.kind == CueKind.DIALOGUE }) R.string.himitsu_subtitle_empty else status, subtitleName = name) }
                     renderReadings()
                     ensureAutomaticReadings()
-                }.onFailure { error -> mutable.update { it.copy(subtitleStatus = subtitleError(error)) } }
+                }.onFailure { error -> mutable.update { it.copy(subtitleStatus = subtitleError(error), subtitleName = attemptedName) } }
             }
         }
     }
@@ -633,6 +647,9 @@ internal class LearningViewModel(application: Application, private val libraryMo
     }
 
     fun notice(resource: Int) { mutable.update { it.copy(notice = resource, noticeSequence = it.noticeSequence + 1) } }
+    private fun failedAudio(resource: Int) {
+        mutable.update { it.copy(openingAudio = false, playing = false, audioFailed = true, notice = resource, noticeSequence = it.noticeSequence + 1) }
+    }
     private fun subtitleError(error: Throwable): Int {
         android.util.Log.w("HimitsuSubtitles", "Subtitle load failed", error)
         return when ((error as? SubtitleFormatException)?.problem) {

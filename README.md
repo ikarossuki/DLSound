@@ -5,9 +5,9 @@
 > <ruby>明日<rp>（</rp><rt>あした</rt><rp>）</rp></ruby>、また。<br>
 > 明天见。
 
-**[下载 Android APK](https://github.com/ikarossuki/DLSound/releases/latest)**　适用于 Android 8.0 及以上。在发布页的 **Assets** 中选择 `DLSound-1.4.3.apk`。[1.4.3 更新说明](docs/releases/v1.4.3.md)
+**[下载 Android APK](https://github.com/ikarossuki/DLSound/releases/latest)**　适用于 Android 8.0 及以上。在发布页的 **Assets** 中选择 `DLSound-1.4.4.apk`。[1.4.4 更新说明](docs/releases/v1.4.4.md)
 
-1.4.3 使用 Kotlin 原生播放器，减少锁屏播放和暂停时的进度采样。升级时可补回旧版作品资料，切换音轨时的续听记录和手选文件夹的书签也有修复。
+1.4.4 可以在「本曲字幕」搜索日文或中文台词，点中结果回听。歌词页会按实际情况引导授权目录、选择字幕或重选音频。换机时，遇到同名或改名音轨，可以在恢复结果里对照作品和路径补选。
 
 ## 播放自己的音频和字幕
 

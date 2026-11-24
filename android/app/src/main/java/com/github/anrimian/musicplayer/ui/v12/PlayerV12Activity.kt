@@ -96,6 +96,8 @@ open class PlayerV12Activity : AppCompatActivity() {
     private var lastRendered: List<RenderedCue>? = null
     private var lastSubtitleStatus = ""
     private var lastNotice = 0
+    internal var libraryAudioFailed = false
+        private set
 
     private val mediaPermission = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { grants ->
         grants.forEach { (permission,granted) -> preferences.edit().putBoolean("asked-"+permission,!granted).apply() }
@@ -106,66 +108,135 @@ open class PlayerV12Activity : AppCompatActivity() {
         check(Permissions.hasFilePermission(this) && started && !snapshot.optBoolean("libraryLoading",true)
                 && snapshot.optString("sourceError").isEmpty()) { "请先授权并等候曲库成功加载" }
     }
-    private fun backupFile(uri:Uri?, restore:Boolean) {
-        if(uri==null || backupBusy)return
-        backupBusy=true
+    private val draft by lazy { RestoreDraft(this) }
+    internal var restoreSession: RestoreSession? = null
+        private set
+    private fun libraryBackup() = LibraryBackup(store, trackJson.toMap(), tracks.toMap())
+    private fun backupOperation(block: suspend () -> Unit) {
+        if (backupBusy) return
+        backupBusy = true
         lifecycleScope.launch {
-            try {
-                requireBackupCatalog()
-                val backup=LibraryBackup(store,trackJson.toMap(),tracks.toMap())
-                val prefs=JSONObject(snapshot.getJSONObject("prefs").toString())
-                prefs.put("treeMode",JSONObject(preferences.getString("folderBrowser","{}")).optBoolean("tree"))
-                fun favorites() = preferences.getStringSet("favorites",emptySet()).orEmpty().toSet()
-                val message=if(restore){
-                    val result=withContext(Dispatchers.IO){
-                        val text=contentResolver.openInputStream(uri)?.use(SafLearningFiles::readText) ?: throw IllegalStateException("无法读取备份文件")
-                        backup.restore(JSONObject(text))
-                    }
-                    for(key in listOf("theme","language","font","ruby","rubyScale","depth","speed","repeat","shuffle","librarySort")){
-                        if(result.preferences.has(key)) preference(obj("key" to key,"value" to result.preferences.get(key)))
-                    }
-                    preferences.edit().putStringSet("favorites",LibraryBackup.mergedFavorites(preferences, result.favorites))
-                        .putString("folderBrowser",obj("tree" to result.preferences.optBoolean("treeMode"),"path" to "").toString()).apply()
-                    publishPreferences();publishOffset();model.reloadSubtitle();emit(obj("studyRevision" to System.nanoTime().toString(), "browserRevision" to System.nanoTime().toString()))
-                    val locations = trackJson.values.map(LibraryBackup::folderPath).toSet()
-                    val roots = mutableSetOf<String>()
-                    for (location in locations) {
-                        var path = location
-                        while (path.isNotEmpty() && roots.add(path)) path = path.substringBeforeLast('/', "")
-                    }
-                    val works = store.study.list("works")
-                    val lostWorks = (0 until works.length()).map(works::getJSONObject).filter { it.getString("key") !in roots }
-                    buildString {
-                        append("恢复完成。")
-                        if (lostWorks.isNotEmpty()) append("\n请在作品库点「重新关联作品目录」：\n" +
-                            lostWorks.joinToString("\n") { it.getString("name") })
-                        if (store.pendingProgress.length() > 0) append("\n仍有 ${store.pendingProgress.length()} 条续听进度等待匹配，可在作品库重新关联目录。")
-                        if (result.missing.isNotEmpty()) append("\n未能匹配的音轨：\n" + result.missing.joinToString("\n"))
-                    }
-                }else{
-                    val exportFavorites = favorites()
-                    val activeId = queue.find { it.itemId == currentItem }?.id
-                    val live = if (activeId != null && transport.playing &&
-                        component.playerCoordinator().isPlayingLibrarySource(activeId)) {
-                        val ms = player.getTrackPosition().await()
-                        if (ms >= 0 && component.playerCoordinator().isPlayingLibrarySource(activeId))
-                            com.github.anrimian.musicplayer.data.database.entities.play_queue.FilePositionEntity(activeId, ms, System.currentTimeMillis())
-                        else null
-                    } else null
-                    withContext(Dispatchers.IO){
-                        val bytes=backup.export(prefs,exportFavorites,live).toString().toByteArray()
-                        require(bytes.size<=SafLearningFiles.MAX_BYTES) { "备份超过 8 MB，无法导出" }
-                        contentResolver.openOutputStream(uri,"wt")?.use { it.write(bytes) } ?: throw IllegalStateException("无法写入备份文件")
-                    }
-                    "备份文件已保存。"
-                }
-                MaterialAlertDialogBuilder(dialogContext()).setTitle(if(restore)"恢复备份" else "导出备份").setMessage(message).setPositiveButton("完成",null).show()
-            }catch(e:Exception){error("备份操作未完成："+(e.localizedMessage?:"请检查文件权限"))}
-            finally{backupBusy=false}
+            try { requireBackupCatalog(); block() }
+            catch (e: kotlinx.coroutines.CancellationException) { throw e }
+            catch (e: Exception) { error("备份操作未完成：" + (e.localizedMessage ?: "请检查文件权限")) }
+            finally { backupBusy = false }
         }
     }
-    private val saveBackup=registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { backupFile(it,false) }
-    private val openBackup=registerForActivityResult(ActivityResultContracts.OpenDocument()) { backupFile(it,true) }
+    private val saveBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) backupOperation {
+            val backup = libraryBackup()
+            val prefs = JSONObject(snapshot.getJSONObject("prefs").toString())
+            prefs.put("treeMode", JSONObject(preferences.getString("folderBrowser","{}")).optBoolean("tree"))
+            val exportFavorites = preferences.getStringSet("favorites",emptySet()).orEmpty().toSet()
+            val activeId = queue.find { it.itemId == currentItem }?.id
+            val live = if (activeId != null && transport.playing &&
+                component.playerCoordinator().isPlayingLibrarySource(activeId)) {
+                val ms = player.getTrackPosition().await()
+                if (ms >= 0 && component.playerCoordinator().isPlayingLibrarySource(activeId))
+                    com.github.anrimian.musicplayer.data.database.entities.play_queue.FilePositionEntity(activeId, ms, System.currentTimeMillis())
+                else null
+            } else null
+            withContext(Dispatchers.IO){
+                val bytes=backup.export(prefs,exportFavorites,live).toString().toByteArray()
+                require(bytes.size<=SafLearningFiles.MAX_BYTES) { "备份超过 8 MB，无法导出" }
+                contentResolver.openOutputStream(uri,"wt")?.use { it.write(bytes) } ?: throw IllegalStateException("无法写入备份文件")
+            }
+
+            MaterialAlertDialogBuilder(dialogContext()).setTitle("导出备份").setMessage("备份文件已保存。").setPositiveButton("完成",null).show()
+        }
+    }
+    private fun pickBackup() = openBackup.launch(arrayOf("application/json","text/plain","application/octet-stream"))
+    private fun startRestore() {
+        if (!draft.exists) pickBackup()
+        else screen.menu("恢复备份", listOf("继续上次匹配" to { reviewBackup(null) }, "选择其他备份" to ::pickBackup))
+    }
+    internal val hasRestoreDraft get() = draft.exists
+    internal fun resumeRestore() {
+        if (draft.exists && !snapshot.optBoolean("libraryLoading",true) && snapshot.text("sourceError").isEmpty())
+            reviewBackup(null, reopen = true)
+    }
+    private fun reviewBackup(uri: Uri?, reopen: Boolean = false) = backupOperation {
+        val rows = trackJson.toMap()
+        val backup = libraryBackup()
+        val session = withContext(Dispatchers.IO) {
+            val text = if (uri == null) draft.source() else contentResolver.openInputStream(uri)?.use(SafLearningFiles::readText)
+                ?: throw IllegalStateException("无法读取备份文件")
+            val doc = JSONObject(text)
+            val key = textFingerprint(text)
+            val matches = BackupMatches(doc, rows, draft.choices(key))
+            backup.validateDraft(doc)
+            if (uri != null || draft.keyMissing(key)) draft.saveSource(text,key)
+            RestoreSession(key, doc, matches)
+        }
+        restoreSession = session
+        if (reopen) { if (screen.route.name in setOf("restoreReview","restoreTrack")) screen.render() }
+        else if (uri != null && session.matches.unresolved.isEmpty()) applyRestore(session)
+        else if (screen.route.name == "restoreReview") screen.render() else screen.go("restoreReview")
+    }
+    internal fun chooseBackupTrack(old: String, local: LocalBackupTrack) = backupOperation {
+        val session = restoreSession ?: return@backupOperation
+        val rows = trackJson.toMap()
+        val matches = withContext(Dispatchers.IO) {
+            draft.choose(session.key, old, local)
+            BackupMatches(session.doc, rows, draft.choices(session.key))
+        }
+        restoreSession = session.copy(matches = matches)
+        if (screen.route == NativePage("restoreTrack", old)) screen.back()
+    }
+    internal fun finishRestore() = backupOperation { restoreSession?.let { applyRestore(it) } }
+    private suspend fun applyRestore(session: RestoreSession) {
+        val backup = libraryBackup()
+        val result = withContext(Dispatchers.IO) { backup.restore(session.doc, draft.choices(session.key)) }
+        if (!draft.alreadyApplied(session.key)) {
+            for(key in listOf("theme","language","font","ruby","rubyScale","depth","speed","repeat","shuffle","librarySort")){
+                if(result.preferences.has(key)) preference(obj("key" to key,"value" to result.preferences.get(key)))
+            }
+            if (result.preferences.has("treeMode")) preferences.edit().putString("folderBrowser",
+                obj("tree" to result.preferences.optBoolean("treeMode"),"path" to "").toString()).apply()
+        }
+        preferences.edit().putStringSet("favorites",LibraryBackup.mergedFavorites(preferences,result.favorites)).apply()
+        publishPreferences(); publishOffset(); model.reloadSubtitle()
+        emit(obj("studyRevision" to System.nanoTime().toString(), "browserRevision" to System.nanoTime().toString()))
+        val locations = trackJson.values.map(LibraryBackup::folderPath).toSet()
+        val roots = mutableSetOf<String>()
+        for (location in locations) {
+            var path = location
+            while (path.isNotEmpty() && roots.add(path)) path = path.substringBeforeLast('/', "")
+        }
+        val works = store.study.list("works")
+        val lostWorks = (0 until works.length()).map(works::getJSONObject).filter { it.getString("key") !in roots }
+        val partial = result.missing.isNotEmpty()
+        val message = buildString {
+            append(if(partial) "已恢复可匹配的资料，剩余音轨可继续补选。" else "恢复完成。")
+            if (result.deferredLists.isNotEmpty()) append("\n等待补选的歌单：" + result.deferredLists.joinToString("、"))
+            if (lostWorks.isNotEmpty()) append("\n请在作品库重新关联目录：" + lostWorks.joinToString("、") { it.getString("name") })
+            if (store.pendingProgress.length() > 0) append("\n仍有 ${store.pendingProgress.length()} 条续听进度等待匹配。")
+        }
+        if (partial) {
+            val rows = trackJson.toMap()
+            restoreSession = withContext(Dispatchers.IO) {
+                draft.markApplied(session.key)
+                session.copy(matches=BackupMatches(session.doc,rows,draft.choices(session.key)))
+            }
+            if (screen.route.name == "restoreReview") screen.render() else screen.go("restoreReview")
+        } else {
+            withContext(Dispatchers.IO) { draft.clear() }
+            restoreSession = null
+            if (screen.route.name == "restoreReview") screen.back()
+        }
+        MaterialAlertDialogBuilder(dialogContext()).setTitle("恢复结果").setMessage(message)
+            .setPositiveButton(if (partial) "继续匹配" else "完成",null).show()
+    }
+    private val replacementAudio = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null && externalView && !folderView) {
+            runCatching { retain(uri) }
+            intent.data = uri
+            model.openIncoming(uri)
+        }
+    }
+    internal fun chooseIncomingAudio() = replacementAudio.launch(arrayOf("audio/*", "video/mp4"))
+    internal fun requestSubtitleDirectory() = treePicker.launch(learning.track?.parentDocument)
+    private val openBackup=registerForActivityResult(ActivityResultContracts.OpenDocument()) { if (it != null) reviewBackup(it) }
     private val treePicker = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) runCatching {
             contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -259,6 +330,10 @@ open class PlayerV12Activity : AppCompatActivity() {
         subscriptions.add(player.getPlayerStateObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({
             transport.playing=it == PlayerState.PLAY
             transport.preparing=it == PlayerState.LOADING || it == PlayerState.PREPARING
+            if (libraryAudioFailed != (it is PlayerState.Error)) {
+                libraryAudioFailed = it is PlayerState.Error
+                screen.changed(setOf("audioState"))
+            }
             screen.transportTick()
             if (it is PlayerState.Error) error("音频播放失败，请检查文件是否可读取")
         }, {}))
@@ -306,11 +381,13 @@ open class PlayerV12Activity : AppCompatActivity() {
                 if (lastDocument != null && lastDocument?.fingerprint != state.document?.fingerprint) {
                     component.playerCoordinator().clearSentencePractice(playbackType)
                 }
+                val documentChanged = lastDocument !== state.document
                 lastDocument = state.document; lastRendered = state.rendered
-                screen.changed(setOf("cues"))
+                screen.changed(if (documentChanged) setOf("cues", "document") else setOf("cues"))
                 publishOffset()
             }
-            if(state.noticeSequence != lastNotice) { lastNotice = state.noticeSequence; if(state.notice != 0) { error(getString(state.notice)); if(externalView && state.track==null) emit(obj("incomingError" to "无法读取此音频，请从文件管理器重新打开并允许访问。")) } }
+            if(state.noticeSequence != lastNotice) { lastNotice = state.noticeSequence; if(state.notice != 0) error(getString(state.notice)) }
+            emit(obj("audioState" to when { state.audioFailed -> "failed"; state.openingAudio -> "opening"; else -> "ready" }))
             val status = getString(state.subtitleStatus)
             if (status != lastSubtitleStatus) {
                 lastSubtitleStatus = status
@@ -410,7 +487,7 @@ open class PlayerV12Activity : AppCompatActivity() {
                     "exportBackup", "importBackup" -> {
                         requireBackupCatalog()
                         check(!backupBusy) { "请等待备份操作完成" }
-                        if(action=="exportBackup")saveBackup.launch("DL-Sound-backup.json") else openBackup.launch(arrayOf("application/json","text/plain","application/octet-stream"))
+                        if(action=="exportBackup")saveBackup.launch("DL-Sound-backup.json") else startRestore()
                     }
                     "moveWork" -> {
                         check(!backupBusy) { "请等待备份操作完成" }
@@ -457,7 +534,7 @@ open class PlayerV12Activity : AppCompatActivity() {
                             com.github.anrimian.musicplayer.ui.equalizer.EqualizerDialogFragment().show(supportFragmentManager, "equalizer")
                         }
                     }
-                    "requestTree" -> treePicker.launch(model.state.value.track?.parentDocument)
+                    "requestTree" -> requestSubtitleDirectory()
                     "requestMedia" -> requestAccess(Permissions.getFilePermissionName())
                     "requestVideo" -> if(Build.VERSION.SDK_INT>=33) requestAccess(Manifest.permission.READ_MEDIA_VIDEO) else requestAccess(Permissions.getFilePermissionName())
                     "refresh" -> {
@@ -496,6 +573,12 @@ open class PlayerV12Activity : AppCompatActivity() {
     }
 
     internal fun togglePlayback() { if(externalView) model.playPause() else player.playOrPause() }
+    internal fun ownsSubtitle(id: String) = model.ownsSubtitle(id)
+    internal fun seekDialogue(id: String, document: SubtitleDocument, cueId: String): Boolean {
+        if (transport.current?.id != id || !model.ownsSubtitle(id) || learning.document !== document) return false
+        model.seekCue(document.fingerprint, cueId)
+        return true
+    }
     internal fun seekTo(ms:Long) { if(externalView) model.seek(ms) else player.onSeekFinished(ms.coerceIn(0,transport.duration.coerceAtLeast(0))) }
     internal fun skipTrack(previous:Boolean) {
         if(folderView) { if(previous) model.previous() else model.next() }

@@ -55,7 +55,8 @@ internal class NativeSettings(private val ui:NativePlayerScreen) {
         val title=if(page=="license") licenses[route.key]?.first.orEmpty() else titles[page].orEmpty()
         header(title,if(page=="me") null else "返回上一页")
         val theme=themes[prefs.text("theme")] ?: "跟随系统"
-        fun row(name:String,detail:String="",meta:String="",icon:Int=0,run:()->Unit)=NativeRow(name,detail,icon,meta,profile=true,open=run)
+        fun row(name:String,detail:String="",meta:String="",icon:Int=0,run:()->Unit)=
+            NativeRow(name,detail,icon,meta,profile=true,titleLines=if(page=="track") 2 else 1,open=run)
         val items=mutableListOf<NativeRow>()
         when(page) {
             "me" -> {
@@ -110,6 +111,9 @@ internal class NativeSettings(private val ui:NativePlayerScreen) {
                 val t=current
                 if(t==null){textBlock(body,"请先打开音轨");return@with}
                 textBlock(body,t.text("title"),18)
+                if (host.ownsSubtitle(t.text("id")) && host.learning.document?.cues?.any {
+                    it.kind == com.github.anrimian.musicplayer.ui.learning.CueKind.DIALOGUE
+                } == true) items += row("查找台词", icon=R.drawable.dls_search) { dialogueSearch.open() }
                 items+=row("分别选择日文和中文字幕",icon=R.drawable.dls_folder){host.selectPair()}
                 if(state.optBoolean("pairRule")) items+=row("取消本目录双字幕规则"){host.clearSubtitleRule()}
                 items+=row("导入字幕",icon=R.drawable.dls_book){host.selectSubtitle()}
