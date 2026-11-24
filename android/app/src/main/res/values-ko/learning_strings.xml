@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">오디오 폴더를 선택한 뒤 트랙을 눌러 시작하세요.</string>
+    <string name="himitsu_audio_error">오디오를 재생할 수 없습니다. 파일 접근 권한을 확인하거나 다른 트랙을 선택하세요.</string>
+    <string name="himitsu_directory_permission">폴더 접근 권한이 만료되었습니다. 오디오 폴더를 다시 선택하세요.</string>
+    <string name="himitsu_directory_error">폴더를 읽을 수 없습니다. 폴더가 있는지 확인하거나 다른 폴더를 선택하세요.</string>
+    <string name="himitsu_file_unavailable">이전 트랙에 접근할 수 없습니다. 폴더에서 트랙을 다시 선택하세요.</string>
+    <string name="himitsu_subtitle_loading">자막 읽는 중…</string>
+    <string name="himitsu_subtitle_folder_needed">오디오 폴더 접근을 허용하면 해당 폴더와 하위 폴더에서 이름이 같은 자막을 찾습니다.</string>
+    <string name="himitsu_subtitle_missing">이름이 같은 자막을 찾지 못했습니다. 자막을 눌러 파일을 선택하세요.</string>
+    <string name="himitsu_subtitle_empty">자막에 유효한 시간 정보가 없습니다. 오디오는 계속 재생할 수 있습니다.</string>
+    <string name="himitsu_subtitle_auto">자동 연결</string>
+    <string name="himitsu_subtitle_manual">직접 선택한 자막</string>
+    <string name="himitsu_subtitle_saved">선택한 트랙에 자막을 저장했습니다.</string>
+    <string name="himitsu_subtitle_error">자막을 읽을 수 없습니다. 형식을 확인하거나 다른 파일을 선택하세요.</string>
+    <string name="himitsu_subtitle_large">자막 파일이 너무 큽니다. 트랙별로 나누세요.</string>
+    <string name="himitsu_reading_busy">오프라인에서 후리가나 생성 중…</string>
+    <string name="himitsu_reading_failed">자동 후리가나를 사용할 수 없습니다. 자막에 포함된 읽는 법과 직접 수정한 내용은 계속 사용할 수 있습니다.</string>
+    <string name="himitsu_reading_edit">읽는 법 수정</string>
+    <string name="himitsu_reading_none">이 자막에는 읽는 법을 수정할 일본 한자가 없습니다.</string>
+    <string name="himitsu_reading_input">히라가나로 읽는 법 입력</string>
+    <string name="himitsu_invalid_reading">히라가나로 입력하세요. 장음 기호도 사용할 수 있습니다.</string>
+    <string name="himitsu_reading_restore">원래 읽는 법 복원</string>
+    <string name="himitsu_reading_subtitle">자막에서 제공</string>
+    <string name="himitsu_reading_auto">자동 생성</string>
+    <string name="himitsu_reading_personal">직접 수정</string>
+    <string name="himitsu_reading_unset">표기 없음</string>
+    <string name="himitsu_save">저장</string>
+    <string name="himitsu_cancel">취소</string>
+    <string name="dlsound_supported_subtitles">VTT, LRC 또는 SRT 자막 파일을 선택하세요.</string>
+</resources>

@@ -25,20 +25,33 @@ class PlayerCoordinatorInteractor(
     private val playerActivationHistory = LinkedList<PlayerType>()
     private val stateLock = Any()
 
+    fun isPlayingLibrarySource(id: Long) = synchronized(stateLock) {
+        isPlayerTypeActive(PlayerType.LIBRARY) &&
+            (preparedSourcesMap[PlayerType.LIBRARY]?.source as? LibraryCompositionSource)?.composition?.id == id
+    }
+
     fun waitForLibrarySource(compositionId: Long) = playerInteractor.getCurrentSourceObservable()
         .filter { (it.value as? LibraryCompositionSource)?.composition?.id == compositionId }
         .firstOrError()
 
+    fun onAppVisibilityChanged(visible: Boolean) = playerInteractor.onAppVisibilityChanged(visible)
+
     fun observeListeningRange(type: PlayerType) = playerInteractor.observeListeningRange()
         .map { if (isPlayerTypeActive(type)) it else Opt() }
 
+    fun clearSentencePractice(type: PlayerType) = synchronized(stateLock) {
+        if (isPlayerTypeActive(type)) playerInteractor.clearSentencePractice()
+    }
+
     fun changeListeningRange(type: PlayerType, matches: (CompositionSource) -> Boolean,
-                             start: Long?, end: Long?, passes: Int, pauseAtEnd: Boolean) {
+                             start: Long?, end: Long?, passes: Int, pauseAtEnd: Boolean,
+                             sentences: List<LongRange>? = null) {
         synchronized(stateLock) {
             val source = preparedSourcesMap[type]?.source
             require(source != null && matches(source)) { "音轨已变化，请重新选择" }
             applyPlayerType(type)
-            if (start == null) playerInteractor.clearListeningRange()
+            if (sentences != null) playerInteractor.listenToSentences(sentences, passes)
+            else if (start == null) playerInteractor.clearListeningRange()
             else playerInteractor.listenFrom(start, end, passes, pauseAtEnd)
         }
     }

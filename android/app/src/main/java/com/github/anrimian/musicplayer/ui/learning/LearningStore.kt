@@ -1,6 +1,7 @@
 package com.github.anrimian.musicplayer.ui.learning
 
 import android.content.Context
+import android.os.SystemClock
 import com.github.anrimian.musicplayer.data.models.composition.source.ExternalCompositionSource
 import com.github.anrimian.musicplayer.domain.interactors.player.ExternalPlayerInteractor
 import io.reactivex.rxjava3.disposables.CompositeDisposable
@@ -9,6 +10,8 @@ import java.io.File
 import org.json.JSONArray
 
 internal class LearningStore(context: Context) {
+    val folderPositions = FolderPositions(context)
+    val study = com.github.anrimian.musicplayer.ui.v12.StudyRecords(context)
     private val preferences = context.getSharedPreferences("himitsu-learning-v1", Context.MODE_PRIVATE)
     // Keep portable display settings separate from URI grants and private subtitle bindings.
     private val display=context.getSharedPreferences("dlsound-display",Context.MODE_PRIVATE)
@@ -106,6 +109,9 @@ internal class LearningStore(context: Context) {
         return null
     }
     val directory = File(context.filesDir, "himitsu-subtitles").apply { mkdirs() }
+    var pendingProgress: JSONArray
+        get() = JSONArray(preferences.getString("pending-progress", "[]"))
+        set(value) { check(preferences.edit().putString("pending-progress", value.toString()).commit()) }
     var treeUri: String?
         get() = preferences.getString("tree", null)
         set(value) { preferences.edit().putString("tree", value).apply() }
@@ -146,15 +152,26 @@ internal class LearningStore(context: Context) {
         preferences.edit().putLong(offsetKey(track, fingerprint), value.coerceIn(-5000, 5000)).apply()
     }
 
-    fun position(uri: String): Long = preferences.getLong("position-" + textFingerprint(uri), 0).coerceAtLeast(0)
-    fun savePosition(uri: String, position: Long) { preferences.edit().putLong("position-" + textFingerprint(uri), position.coerceAtLeast(0)).apply() }
-    fun checkFileVersion(file: LearningFile): Boolean {
+    fun position(uri: String): Long = folderPositions.position(uri)
+        ?: preferences.getLong("position-" + textFingerprint(uri), 0).coerceAtLeast(0)
+    fun savePosition(uri: String, position: Long) {
+        val ms = position.coerceAtLeast(0)
+        preferences.edit().putLong("position-" + textFingerprint(uri), ms).apply()
+        folderPositions.remember(uri, ms)
+    }
+    fun checkFileVersion(file: LearningFile, preserveBoundProgress: Boolean = false): Boolean {
         val key = "file-version-" + textFingerprint(file.uri)
-        val version = "${file.size}:${file.modified}"
-        val previous = preferences.getString(key, null)
-        if (previous != null && previous != version) savePosition(file.uri, 0)
-        preferences.edit().putString(key, version).apply()
-        return previous != null && previous != version
+        val previous = preferences.getString(key, null).orEmpty()
+        val oldSize = previous.substringBefore(':').toLongOrNull() ?: 0
+        val oldModified = previous.substringAfter(':', "").toLongOrNull() ?: 0
+        val changed = (file.size > 0 && oldSize > 0 && file.size != oldSize) ||
+                (file.modified > 0 && oldModified > 0 && file.modified != oldModified)
+        if (changed && !preserveBoundProgress) savePosition(file.uri, 0)
+        val size = file.size.takeIf { it > 0 } ?: if (changed) 0 else oldSize
+        val modified = file.modified.takeIf { it > 0 } ?: if (changed) 0 else oldModified
+        val version = "$size:$modified"
+        if (version != previous) preferences.edit().putString(key, version).apply()
+        return changed
     }
     fun correctionsFor(track: String, document: SubtitleDocument): (SubtitleCue, ReadingPiece) -> String? {
         val origins = savedOrigins(track)
@@ -174,6 +191,11 @@ internal class LearningStore(context: Context) {
     }
     private fun correctionKey(track: String, document: SubtitleDocument, cue: SubtitleCue, piece: ReadingPiece): String =
         "reading-" + textFingerprint("$track\u0000${document.fingerprint}\u0000${cue.id}\u0000${piece.start}:${piece.end}\u0000${piece.text}")
+    fun pairBinding(scope:String, key:String): JSONArray? =
+        preferences.getString("pair-$scope-" + textFingerprint(key),null)?.let(::JSONArray)
+    fun setPairBinding(scope:String, key:String, value:JSONArray?) {
+        preferences.edit().putString("pair-$scope-" + textFingerprint(key),value?.toString()).apply()
+    }
     fun manualFile(uri: String) = File(directory, textFingerprint(uri) + ".manual")
     fun manualUri(uri: String): String? = preferences.getString("manual-uri-" + textFingerprint(uri), null)
     fun setManualUri(uri: String, subtitleUri: String?) {
@@ -207,27 +229,57 @@ internal class LearningStore(context: Context) {
 internal object LearningProgressRecorder {
     private var started = false
     private val subscriptions = CompositeDisposable()
+    private lateinit var store: LearningStore
+    private var activeUri: String? = null
+    private var duration = 0L
+    private var latest: Long? = null
+    private var saved: Long? = null
+    private var savedAt = 0L
+    private var playing = false
+
+    fun flush(uri: String) {
+        if (uri != activeUri) return
+        val position = latest ?: return
+        if (position == saved) return
+        store.savePosition(uri, position)
+        saved = position
+        savedAt = SystemClock.elapsedRealtime()
+    }
+
+    fun saveSeek(uri: String, position: Long) {
+        if (uri == activeUri) {
+            latest = resumePosition(position)
+            flush(uri)
+        }
+    }
+
+    private fun resumePosition(position: Long) =
+        if (duration > 0 && position >= duration) 0L else position.coerceAtLeast(0)
+
     @Synchronized
     fun start(context: Context, player: ExternalPlayerInteractor) {
         if (started) return
         started = true
-        val store = LearningStore(context.applicationContext)
-        var activeUri: String? = null
-        var duration = 0L
-        var lastSaved = -1L
+        store = LearningStore(context.applicationContext)
         subscriptions.add(player.getCurrentSourceObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({ source ->
             val external = source.value as? ExternalCompositionSource
-            activeUri = external?.uri?.toString()?.takeIf { it == store.trackUri }
-            duration = external?.duration ?: 0
-            lastSaved = -1
-        }, { activeUri = null }))
-        subscriptions.add(player.getTrackPositionObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({ position ->
-            val uri = activeUri?.takeIf { it == store.trackUri } ?: return@subscribe
-            val clamped = if (duration > 0) position.coerceIn(0, duration) else position.coerceAtLeast(0)
-            if (clamped / 1_000 != lastSaved / 1_000 || clamped == 0L) {
-                store.savePosition(uri, if (duration > 0 && clamped >= duration) 0 else clamped)
-                lastSaved = clamped
+            val uri = external?.uri?.toString()?.takeIf { it == store.trackUri }
+            if (uri != activeUri) {
+                activeUri?.let(::flush)
+                activeUri = uri
+                latest = null
+                saved = null
             }
+            duration = external?.duration ?: 0
+        }, { activeUri = null }))
+        subscriptions.add(player.getIsPlayingStateObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({ value ->
+            playing = value
+            if (!playing) activeUri?.let(::flush)
+        }, {}))
+        subscriptions.add(player.getTrackPositionObservable().observeOn(AndroidSchedulers.mainThread()).subscribe({ position ->
+            val uri = activeUri ?: return@subscribe
+            latest = resumePosition(position)
+            if (!playing || saved == null || latest == 0L || SystemClock.elapsedRealtime() - savedAt >= 5_000L) flush(uri)
         }, {}))
     }
 }

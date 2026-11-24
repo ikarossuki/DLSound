@@ -119,6 +119,8 @@ androidComponents {
 }
 
 dependencies {
+    androidTestImplementation(libs.room)
+
     implementation(project(":shared:app"))
     implementation(project(":shared:domain"))
     implementation(project(":shared:app:lite"))

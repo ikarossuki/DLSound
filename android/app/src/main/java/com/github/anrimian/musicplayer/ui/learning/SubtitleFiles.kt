@@ -1,7 +1,7 @@
 package com.github.anrimian.musicplayer.ui.learning
 
 internal object SubtitleFiles {
-    private val suffixes = listOf("hms.json", "vtt", "lrc", "srt")
+    private val suffixes = listOf("vtt", "lrc", "srt")
 
     fun match(audioName: String, listing: List<LearningFile>): LearningFile? {
         val base = audioName.substringBeforeLast('.')
@@ -10,11 +10,13 @@ internal object SubtitleFiles {
         }
     }
 
+    fun retiredName(name: String?) = name?.endsWith(".json", ignoreCase = true) == true
+
     // Manual imports and their private cache may have no usable filename.
     fun decode(raw: String, name: String? = null): SubtitleDocument {
         val first = raw.removePrefix("\uFEFF").lineSequence().firstOrNull { it.isNotBlank() }?.trim().orEmpty()
         return when {
-            first.startsWith('{') -> StructuredSubtitleDecoder.decode(raw)
+            retiredName(name) || first.startsWith('{') -> throw SubtitleFormatException("retired")
             first == "WEBVTT" || first.startsWith("WEBVTT ") || first.startsWith("WEBVTT\t") ->
                 TimedTextDecoder.decode(raw, webVtt = true)
             name?.endsWith(".vtt", true) == true -> throw SubtitleFormatException("format")

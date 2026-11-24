@@ -19,6 +19,7 @@ import io.reactivex.rxjava3.core.Scheduler
 import io.reactivex.rxjava3.core.Single
 import io.reactivex.rxjava3.disposables.CompositeDisposable
 import io.reactivex.rxjava3.disposables.Disposable
+import io.reactivex.rxjava3.disposables.SerialDisposable
 import io.reactivex.rxjava3.subjects.BehaviorSubject
 import io.reactivex.rxjava3.subjects.PublishSubject
 import java.util.concurrent.TimeUnit
@@ -47,12 +48,24 @@ class PlayerInteractor(
     private var currentSource: CompositionSource? = null
     private val currentSourceSubject = BehaviorSubject.create<Opt<CompositionSource>>()//add default null value and check all behaviour
 
-    data class ListeningRange(val start: Long, val end: Long, val passes: Int, val pauseAtEnd: Boolean)
+    data class SentencePractice(val bounds: List<LongRange>, val passes: Int)
+    data class ListeningRange(val start: Long, val end: Long, val passes: Int, val pauseAtEnd: Boolean,
+                              val sentence: Int = 0, val practice: SentencePractice? = null) {
+        val sentenceCount get() = practice?.bounds?.size ?: 0
+    }
     private val listeningRange = BehaviorSubject.createDefault<Opt<ListeningRange>>(Opt())
+    private val appVisible = BehaviorSubject.createDefault(false)
+
+    fun onAppVisibilityChanged(visible: Boolean) = appVisible.onNext(visible)
+
     fun observeListeningRange(): Observable<Opt<ListeningRange>> = listeningRange.hide()
 
     fun clearListeningRange() {
         if (listeningRange.value?.value != null) listeningRange.onNext(Opt())
+    }
+
+    fun clearSentencePractice() {
+        if (listeningRange.value?.value?.practice != null) clearListeningRange()
     }
 
     fun listenFrom(start: Long, end: Long?, passes: Int, pauseAtEnd: Boolean = false) {
@@ -63,10 +76,30 @@ class PlayerInteractor(
         play()
     }
 
+    fun listenToSentences(bounds: List<LongRange>, passes: Int) {
+        require(bounds.isNotEmpty() && passes in 1..99)
+        require(bounds.all { it.first >= 0 && it.last > it.first })
+        startSentence(SentencePractice(bounds.toList(), passes), 0)
+        play()
+    }
+
+    private fun startSentence(practice: SentencePractice, index: Int) {
+        val bounds = practice.bounds[index]
+        listeningRange.onNext(Opt(ListeningRange(bounds.first, bounds.last, practice.passes, false,
+            index + 1, practice)))
+        seekTo(bounds.first)
+        trackPositionChangeSubject.onNext(bounds.first)
+    }
+
     private fun repeatRangeAt(position: Long): Boolean {
         val range = listeningRange.value?.value ?: return false
         if (position < range.end) return false
         if (range.passes == 1) {
+            val practice = range.practice
+            if (practice != null && range.sentence < practice.bounds.size) {
+                startSentence(practice, range.sentence)
+                return true
+            }
             clearListeningRange()
             if (range.pauseAtEnd) {
                 pause()
@@ -94,6 +127,7 @@ class PlayerInteractor(
 
     private val eventsDisposable = CompositeDisposable()
     private var trackPositionDisposable: Disposable? = null
+    private val pausedPositionRead = SerialDisposable()
     private var playerEventsDisposable: Disposable? = null
     private var delayedResumeDisposable: Disposable? = null
 
@@ -225,7 +259,7 @@ class PlayerInteractor(
         clearListeningRange()
         systemServiceController.stopMusicService()
         musicPlayerController.seekTo(0)
-        pauseInternal()
+        pauseInternal(capturePosition = false)
         eventsDisposable.clear()
 
         isPlayingSubject.onNext(false)
@@ -237,6 +271,7 @@ class PlayerInteractor(
     }
 
     fun onSeekFinished(position: Long) {
+        pausedPositionRead.set(null)
         cancelRangeOutside(position)
         if (!isPreparing) {
             musicPlayerController.seekTo(position)
@@ -521,6 +556,7 @@ class PlayerInteractor(
     }
 
     private fun seekTo(position: Long) {
+        pausedPositionRead.set(null)
         updateCurrentPosition(position)
         if (!isPreparing) {
             musicPlayerController.seekTo(position)
@@ -532,19 +568,29 @@ class PlayerInteractor(
         startTracingTrackPosition()
     }
 
-    private fun pauseInternal() {
+    private fun pauseInternal(capturePosition: Boolean = true) {
         musicPlayerController.pause()
         stopTracingTrackPosition()
+        if (capturePosition && isPrepared && appVisible.value == false && listeningRange.value?.value == null) {
+            // A background checkpoint can lag the decoder by a second. Publish the actual paused position once.
+            pausedPositionRead.set(musicPlayerController.getTrackPosition()
+                .subscribe(::updateCurrentPosition, analytics::processNonFatalError))
+        }
     }
 
     private fun startTracingTrackPosition() {
         stopTracingTrackPosition()
-        trackPositionDisposable = musicPlayerController.getTrackPositionObservable()
+        // Timed practice still needs to detect the end of a sentence with the display off.
+        trackPositionDisposable = Observable.combineLatest(appVisible, listeningRange) { visible, range ->
+            if (visible || range.value != null) 50L else 1_000L
+        }.distinctUntilChanged()
+            .switchMap(musicPlayerController::getTrackPositionObservable)
             .doOnSubscribe { trackPositionSubject.onNext(currentPosition) }
             .subscribe { position -> if (!repeatRangeAt(position)) updateCurrentPosition(position) }
     }
 
     private fun stopTracingTrackPosition() {
+        pausedPositionRead.set(null)
         if (trackPositionDisposable != null) {
             trackPositionDisposable!!.dispose()
             trackPositionDisposable = null

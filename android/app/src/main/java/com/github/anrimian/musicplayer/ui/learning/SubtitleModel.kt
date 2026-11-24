@@ -45,6 +45,20 @@ internal data class SubtitleDocument(
 )
 
 internal data class RenderedCue(val cue: SubtitleCue, val pieces: List<ReadingPiece>)
+
+/** Use the original dialogue clock for bilingual pairs, even when only the translation is shown. */
+internal fun SubtitleDocument.practiceSentences(position: Long, duration: Long, offset: Long): List<LongRange> {
+    if (duration <= 0) return emptyList()
+    fun audioTime(time: Long) = time.coerceAtMost(Long.MAX_VALUE - 5000).plus(offset).coerceIn(0, duration)
+    val bounds = cues.asSequence()
+        .filter { it.kind == CueKind.DIALOGUE && (id != "parallel" || it.japaneseText.isNotBlank()) }
+        .map { audioTime(it.startMs)..audioTime(it.endMs ?: Long.MAX_VALUE) }
+        .filter { it.first < it.last }
+        .groupBy { it.first }.toSortedMap().map { (_, group) -> group.maxBy { it.last } }
+    val current = bounds.indexOfLast { position >= it.first && position < it.last }
+    val first = if (current >= 0) current else bounds.indexOfFirst { it.first >= position }
+    return if (first < 0) emptyList() else bounds.drop(first)
+}
 internal class SubtitleFormatException(val problem: String) : IllegalArgumentException(problem)
 
 internal fun textFingerprint(text: String): String = MessageDigest.getInstance("SHA-256")

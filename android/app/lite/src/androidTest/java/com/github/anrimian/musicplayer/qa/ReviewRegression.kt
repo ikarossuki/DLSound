@@ -4,9 +4,11 @@ package com.github.anrimian.musicplayer.qa
 
 import android.app.Application
 import android.app.Instrumentation
+import android.content.ContentUris
 import android.net.Uri
 import android.os.FileObserver
 import android.os.SystemClock
+import android.provider.MediaStore
 import com.github.anrimian.musicplayer.ui.learning.*
 import com.github.anrimian.musicplayer.ui.v12.LibraryBackup
 import kotlinx.coroutines.runBlocking
@@ -90,7 +92,13 @@ object ReviewRegression {
             check(predicate()) { "Timed out at track " + model.state.value.track?.uri + ", rendered=" + model.state.value.rendered.size }
         }
         fun open(name: String): String {
-            val uri = Uri.fromFile(File("/storage/emulated/0/Music/DLSoundReview", name))
+            val tracks = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
+            val path = "/storage/emulated/0/Music/DLSoundMatrix/$name"
+            val id = context.contentResolver.query(tracks, arrayOf(MediaStore.Audio.Media._ID),
+                "${MediaStore.Audio.Media.DATA} = ?", arrayOf(path), null)?.use {
+                if (it.moveToFirst()) it.getLong(0) else null
+            } ?: error("Missing indexed QA audio: $path")
+            val uri = ContentUris.withAppendedId(tracks, id)
             test.runOnMainSync { model.openIncoming(uri) }
             awaitState { model.state.value.track?.uri == uri.toString() && !model.state.value.openingAudio }
             return uri.toString()

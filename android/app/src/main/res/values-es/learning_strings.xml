@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Elige una carpeta de audio y toca una pista para empezar.</string>
+    <string name="himitsu_audio_error">No se puede reproducir el audio. Comprueba el acceso al archivo o elige otra pista.</string>
+    <string name="himitsu_directory_permission">El acceso a la carpeta ha caducado. Vuelve a elegir la carpeta de audio.</string>
+    <string name="himitsu_directory_error">No se puede leer la carpeta. Comprueba que exista o elige otra.</string>
+    <string name="himitsu_file_unavailable">La pista anterior ya no está disponible. Vuelve a elegir una pista de la carpeta.</string>
+    <string name="himitsu_subtitle_loading">Leyendo subtítulos…</string>
+    <string name="himitsu_subtitle_folder_needed">Permite el acceso a la carpeta de audio para buscar subtítulos con el mismo nombre en ella y en sus subcarpetas.</string>
+    <string name="himitsu_subtitle_missing">No se encontraron subtítulos con el mismo nombre. Toca Subtítulos para elegir un archivo.</string>
+    <string name="himitsu_subtitle_empty">Los subtítulos no tienen tiempos válidos. El audio se puede seguir reproduciendo.</string>
+    <string name="himitsu_subtitle_auto">Asociación automática</string>
+    <string name="himitsu_subtitle_manual">Subtítulos elegidos manualmente</string>
+    <string name="himitsu_subtitle_saved">Subtítulos guardados para la pista seleccionada.</string>
+    <string name="himitsu_subtitle_error">No se pueden leer los subtítulos. Comprueba el formato o elige otro archivo.</string>
+    <string name="himitsu_subtitle_large">El archivo de subtítulos es demasiado grande. Divídelo por pistas.</string>
+    <string name="himitsu_reading_busy">Generando lecturas sin conexión…</string>
+    <string name="himitsu_reading_failed">Las lecturas automáticas no están disponibles. Puedes seguir usando las de los subtítulos y tus correcciones.</string>
+    <string name="himitsu_reading_edit">Corregir lectura</string>
+    <string name="himitsu_reading_none">Este subtítulo no contiene kanji japoneses que corregir.</string>
+    <string name="himitsu_reading_input">Escribe la lectura en hiragana</string>
+    <string name="himitsu_invalid_reading">Usa hiragana para la lectura. Se permite la marca de vocal larga.</string>
+    <string name="himitsu_reading_restore">Restaurar lectura original</string>
+    <string name="himitsu_reading_subtitle">De los subtítulos</string>
+    <string name="himitsu_reading_auto">Generada automáticamente</string>
+    <string name="himitsu_reading_personal">Corrección personal</string>
+    <string name="himitsu_reading_unset">Sin lectura</string>
+    <string name="himitsu_save">Guardar</string>
+    <string name="himitsu_cancel">Cancelar</string>
+    <string name="dlsound_supported_subtitles">Elige un archivo de subtítulos VTT, LRC o SRT.</string>
+</resources>

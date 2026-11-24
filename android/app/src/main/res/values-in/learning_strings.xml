@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Pilih folder audio, lalu ketuk trek untuk memulai.</string>
+    <string name="himitsu_audio_error">Audio tidak dapat diputar. Periksa akses ke berkas atau pilih trek lain.</string>
+    <string name="himitsu_directory_permission">Izin akses folder telah berakhir. Pilih kembali folder audio.</string>
+    <string name="himitsu_directory_error">Folder tidak dapat dibaca. Pastikan folder masih ada atau pilih folder lain.</string>
+    <string name="himitsu_file_unavailable">Trek sebelumnya tidak tersedia. Pilih kembali trek dari folder.</string>
+    <string name="himitsu_subtitle_loading">Membaca takarir…</string>
+    <string name="himitsu_subtitle_folder_needed">Izinkan akses ke folder audio untuk menemukan takarir bernama sama di folder ini dan subfoldernya.</string>
+    <string name="himitsu_subtitle_missing">Takarir bernama sama tidak ditemukan. Ketuk Takarir untuk memilih berkas.</string>
+    <string name="himitsu_subtitle_empty">Takarir tidak memiliki penanda waktu yang valid. Audio tetap dapat diputar.</string>
+    <string name="himitsu_subtitle_auto">Pencocokan otomatis</string>
+    <string name="himitsu_subtitle_manual">Takarir yang dipilih secara manual</string>
+    <string name="himitsu_subtitle_saved">Takarir disimpan untuk trek yang dipilih.</string>
+    <string name="himitsu_subtitle_error">Takarir tidak dapat dibaca. Periksa formatnya atau pilih berkas lain.</string>
+    <string name="himitsu_subtitle_large">Berkas takarir terlalu besar. Pisahkan berdasarkan trek.</string>
+    <string name="himitsu_reading_busy">Membuat panduan baca secara luring…</string>
+    <string name="himitsu_reading_failed">Panduan baca otomatis tidak tersedia. Panduan dari takarir dan koreksi Anda tetap dapat digunakan.</string>
+    <string name="himitsu_reading_edit">Koreksi cara baca</string>
+    <string name="himitsu_reading_none">Takarir ini tidak memuat kanji Jepang yang dapat dikoreksi.</string>
+    <string name="himitsu_reading_input">Masukkan cara baca dalam hiragana</string>
+    <string name="himitsu_invalid_reading">Gunakan hiragana. Tanda vokal panjang diperbolehkan.</string>
+    <string name="himitsu_reading_restore">Pulihkan cara baca asli</string>
+    <string name="himitsu_reading_subtitle">Dari takarir</string>
+    <string name="himitsu_reading_auto">Dibuat secara otomatis</string>
+    <string name="himitsu_reading_personal">Koreksi pribadi</string>
+    <string name="himitsu_reading_unset">Belum ditandai</string>
+    <string name="himitsu_save">Simpan</string>
+    <string name="himitsu_cancel">Batal</string>
+    <string name="dlsound_supported_subtitles">Pilih berkas takarir VTT, LRC, atau SRT.</string>
+</resources>

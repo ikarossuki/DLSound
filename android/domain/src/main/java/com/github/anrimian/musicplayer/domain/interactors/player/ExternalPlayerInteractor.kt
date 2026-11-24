@@ -37,6 +37,9 @@ class ExternalPlayerInteractor(
     private var activePreparationCompletable: Completable? = null
     private var initialPosition: Long = 0
 
+    private val finishedSourceSubject = PublishSubject.create<CompositionSource>()
+    val finishedSources: Observable<CompositionSource> get() = finishedSourceSubject.hide()
+
     private val resetSignalSubject = PublishSubject.create<Any>()
 
     init {
@@ -210,10 +213,10 @@ class ExternalPlayerInteractor(
     private fun onMusicPlayerEventReceived(playerEvent: PlayerEvent) {
         when (playerEvent) {
             is PlayerEvent.FinishedEvent -> {
-                if (settingsRepository.externalPlayerRepeatMode != RepeatMode.REPEAT_COMPOSITION) {
-                    playerCoordinatorInteractor.pause(PlayerType.EXTERNAL)
-                }
+                val advance = settingsRepository.externalPlayerRepeatMode != RepeatMode.REPEAT_COMPOSITION
+                if (advance) playerCoordinatorInteractor.pause(PlayerType.EXTERNAL)
                 onSeekFinished(0)
+                if (advance) finishedSourceSubject.onNext(playerEvent.source)
             }
             is PlayerEvent.ErrorEvent -> {
                 val throwable = playerEvent.throwable

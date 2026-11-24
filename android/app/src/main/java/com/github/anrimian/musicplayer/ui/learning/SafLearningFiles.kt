@@ -47,6 +47,17 @@ internal class SafLearningFiles(private val context: Context) {
         return result.sortedWith(compareBy<LearningFile> { !it.directory }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.name })
     }
 
+    fun displayName(uri: Uri): String {
+        if (uri.scheme == "file") return uri.lastPathSegment.orEmpty()
+        val name = android.provider.OpenableColumns.DISPLAY_NAME
+        val cursor = try { context.contentResolver.query(uri, arrayOf(name), null, null, null) }
+        catch (_: IllegalArgumentException) { null }
+        return cursor?.use {
+            val column = it.getColumnIndex(name)
+            if (column >= 0 && it.moveToFirst()) it.getString(column) else null
+        } ?: uri.lastPathSegment.orEmpty().substringAfterLast('/')
+    }
+
     fun incomingFile(uri: Uri): Pair<LearningFile, String?> {
         if(uri.scheme=="file"){
             val file=File(requireNotNull(uri.path)).canonicalFile
@@ -59,19 +70,41 @@ internal class SafLearningFiles(private val context: Context) {
         val own=context.packageManager.getPackageInfo(context.packageName,android.content.pm.PackageManager.GET_PROVIDERS).providers.orEmpty()
         require(own.none { provider -> authority in provider.authority.split(';') })
         context.contentResolver.openAssetFileDescriptor(uri, "r")?.use { } ?: error("file_unavailable")
-        val name = context.contentResolver.query(uri, arrayOf(android.provider.OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
-            if (it.moveToFirst()) it.getString(0) else null
-        } ?: uri.lastPathSegment.orEmpty()
-        val path = if (uri.authority == android.provider.MediaStore.AUTHORITY) runCatching {
+        val nameColumn = android.provider.OpenableColumns.DISPLAY_NAME
+        val sizeColumn = android.provider.OpenableColumns.SIZE
+        val modifiedColumn = DocumentsContract.Document.COLUMN_LAST_MODIFIED
+        val columns = if (DocumentsContract.isDocumentUri(context, uri)) arrayOf(nameColumn, sizeColumn, modifiedColumn)
+                      else arrayOf(nameColumn, sizeColumn)
+        var name = uri.lastPathSegment.orEmpty()
+        var size = 0L
+        var modified = 0L
+        val cursor = try { context.contentResolver.query(uri, columns, null, null, null) }
+        catch (_: IllegalArgumentException) { context.contentResolver.query(uri, arrayOf(nameColumn), null, null, null) }
+        cursor?.use {
+            if (it.moveToFirst()) {
+                it.getColumnIndex(nameColumn).takeIf { i -> i >= 0 && !it.isNull(i) }?.let { i -> name = it.getString(i) }
+                it.getColumnIndex(sizeColumn).takeIf { i -> i >= 0 && !it.isNull(i) }?.let { i -> size = it.getLong(i) }
+                it.getColumnIndex(modifiedColumn).takeIf { i -> i >= 0 && !it.isNull(i) }?.let { i -> modified = it.getLong(i) }
+            }
+        }
+        val path = mediaPath(uri)
+        val parent = parentDocument(uri, path)
+        return LearningFile(uri.toString(), name, false, size, modified, audio = true, parentDocument = parent) to
+            (grantedParent(parent) ?: path?.let { readableParent(File(it)) })
+    }
+
+    private fun mediaPath(uri: Uri): String? =
+        if (uri.authority == android.provider.MediaStore.AUTHORITY) runCatching {
             context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null)?.use {
                 if (it.moveToFirst()) it.getString(0) else null
             }
         }.getOrNull() else null
-        val parent = if (authority == EXTERNAL_DOCUMENTS && DocumentsContract.isDocumentUri(context, uri)) {
+
+    fun parentDocument(uri: Uri, path: String? = mediaPath(uri)): Uri? = when {
+        uri.scheme == "file" -> uri.path?.let { parentDocument(File(it)) }
+        uri.authority == EXTERNAL_DOCUMENTS && DocumentsContract.isDocumentUri(context, uri) ->
             parentDocumentForId(DocumentsContract.getDocumentId(uri))
-        } else path?.let { parentDocument(File(it)) }
-        return LearningFile(uri.toString(), name, false, audio = true, parentDocument = parent) to
-            (grantedParent(parent) ?: path?.let { readableParent(File(it)) })
+        else -> path?.let { parentDocument(File(it)) }
     }
 
     private fun parentDocumentForId(id: String): Uri {
@@ -108,7 +141,7 @@ internal class SafLearningFiles(private val context: Context) {
     fun readableParent(audioFile: File): String? = grantedParent(parentDocument(audioFile))
         ?: audioFile.parentFile?.takeIf { it.canRead() }?.let { Uri.fromFile(it).toString() }
 
-    // Under scoped storage a readable filesystem directory can list audio while hiding VTT and JSON.
+    // Scoped storage can expose audio while hiding the subtitle files beside it.
     fun needsTreeForSidecars(folder: String?): Boolean = folder == null ||
         (Uri.parse(folder).scheme == "file" && Build.VERSION.SDK_INT >= 29 && !Environment.isExternalStorageLegacy())
 

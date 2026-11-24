@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Válassz hangmappát, majd koppints egy számra a kezdéshez.</string>
+    <string name="himitsu_audio_error">A hang nem játszható le. Ellenőrizd a fájl elérhetőségét, vagy válassz másik számot.</string>
+    <string name="himitsu_directory_permission">A mappához adott hozzáférés lejárt. Válaszd ki újra a hangmappát.</string>
+    <string name="himitsu_directory_error">A mappa nem olvasható. Ellenőrizd, hogy létezik-e, vagy válassz másikat.</string>
+    <string name="himitsu_file_unavailable">Az előző szám már nem érhető el. Válassz újra egy számot a mappából.</string>
+    <string name="himitsu_subtitle_loading">Feliratok beolvasása…</string>
+    <string name="himitsu_subtitle_folder_needed">Engedélyezd a hangmappa elérését, hogy a lejátszó ott és az almappákban megtalálja az azonos nevű feliratokat.</string>
+    <string name="himitsu_subtitle_missing">Nincs azonos nevű felirat. A Feliratok elemre koppintva választhatsz fájlt.</string>
+    <string name="himitsu_subtitle_empty">A feliratban nincs érvényes időzítés. A hang továbbra is lejátszható.</string>
+    <string name="himitsu_subtitle_auto">Automatikus párosítás</string>
+    <string name="himitsu_subtitle_manual">Kézzel kiválasztott felirat</string>
+    <string name="himitsu_subtitle_saved">A felirat mentve a kiválasztott számhoz.</string>
+    <string name="himitsu_subtitle_error">A felirat nem olvasható. Ellenőrizd a formátumot, vagy válassz másik fájlt.</string>
+    <string name="himitsu_subtitle_large">A feliratfájl túl nagy. Bontsd fel számonként.</string>
+    <string name="himitsu_reading_busy">Olvasatok előállítása kapcsolat nélkül…</string>
+    <string name="himitsu_reading_failed">Az automatikus olvasatok nem érhetők el. A felirat olvasatai és a saját javításaid továbbra is használhatók.</string>
+    <string name="himitsu_reading_edit">Olvasat javítása</string>
+    <string name="himitsu_reading_none">Ebben a feliratban nincs javítható japán kandzsi.</string>
+    <string name="himitsu_reading_input">Írd be az olvasatot hiraganával</string>
+    <string name="himitsu_invalid_reading">Az olvasathoz hiraganát használj. A hosszú magánhangzó jele megengedett.</string>
+    <string name="himitsu_reading_restore">Eredeti olvasat visszaállítása</string>
+    <string name="himitsu_reading_subtitle">A feliratból</string>
+    <string name="himitsu_reading_auto">Automatikusan létrehozva</string>
+    <string name="himitsu_reading_personal">Saját javítás</string>
+    <string name="himitsu_reading_unset">Nincs megadva</string>
+    <string name="himitsu_save">Mentés</string>
+    <string name="himitsu_cancel">Mégse</string>
+    <string name="dlsound_supported_subtitles">Válassz VTT, LRC vagy SRT feliratfájlt.</string>
+</resources>

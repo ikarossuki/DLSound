@@ -40,7 +40,7 @@ import com.github.anrimian.musicplayer.data.database.entities.playlist.PlaylistE
         FilePositionEntity::class,
         TrackPositionEntity::class
     ],
-    version = 21
+    version = 22
 )
 @TypeConverters(
     DateConverter::class,

@@ -145,9 +145,8 @@ class ExoMediaPlayer(
             .subscribe()
     }
 
-    override fun getTrackPositionObservable(): Observable<Long> {
-        return Observable.interval(0, 50, TimeUnit.MILLISECONDS)
-            .observeOn(uiScheduler)
+    override fun getTrackPositionObservable(intervalMs: Long): Observable<Long> {
+        return Observable.interval(0, intervalMs, TimeUnit.MILLISECONDS, uiScheduler)
             .map { player.currentPosition }
     }
 

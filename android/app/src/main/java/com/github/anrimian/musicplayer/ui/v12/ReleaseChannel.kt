@@ -6,8 +6,8 @@ import java.net.URL
 import javax.net.ssl.HttpsURLConnection
 
 internal object ReleaseChannel {
-    const val page = "https://github.com/ikaros0202/DLSound/releases/latest"
-    private const val endpoint = "https://api.github.com/repos/ikaros0202/DLSound/releases/latest"
+    const val page = "https://github.com/ikarossuki/DLSound/releases/latest"
+    private const val endpoint = "https://api.github.com/repos/ikarossuki/DLSound/releases/latest"
 
     private fun parts(version: String): List<Int> {
         val numbers = version.removePrefix("v").split('.')

@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Selecione uma pasta de áudio e toque numa faixa para começar.</string>
+    <string name="himitsu_audio_error">Não foi possível reproduzir o áudio. Verifique o acesso ao ficheiro ou escolha outra faixa.</string>
+    <string name="himitsu_directory_permission">O acesso à pasta expirou. Selecione novamente a pasta de áudio.</string>
+    <string name="himitsu_directory_error">Não foi possível ler a pasta. Verifique se ainda existe ou escolha outra.</string>
+    <string name="himitsu_file_unavailable">A faixa anterior está indisponível. Selecione uma faixa na pasta.</string>
+    <string name="himitsu_subtitle_loading">A ler legendas…</string>
+    <string name="himitsu_subtitle_folder_needed">Permita o acesso à pasta de áudio para encontrar legendas com o mesmo nome nesta pasta e nas subpastas.</string>
+    <string name="himitsu_subtitle_missing">Não foram encontradas legendas correspondentes. Toque em Legendas para escolher um ficheiro.</string>
+    <string name="himitsu_subtitle_empty">As legendas não têm marcações de tempo válidas. O áudio continua disponível.</string>
+    <string name="himitsu_subtitle_auto">Associação automática</string>
+    <string name="himitsu_subtitle_manual">Legendas selecionadas manualmente</string>
+    <string name="himitsu_subtitle_saved">Legendas guardadas para a faixa selecionada.</string>
+    <string name="himitsu_subtitle_error">Não foi possível ler as legendas. Verifique o formato ou escolha outro ficheiro.</string>
+    <string name="himitsu_subtitle_large">O ficheiro de legendas é demasiado grande. Divida-o por faixa.</string>
+    <string name="himitsu_reading_busy">A gerar leituras sem ligação…</string>
+    <string name="himitsu_reading_failed">As leituras automáticas estão indisponíveis. As leituras das legendas e as suas correções continuam disponíveis.</string>
+    <string name="himitsu_reading_edit">Corrigir leitura</string>
+    <string name="himitsu_reading_none">Esta legenda não contém kanji japoneses para corrigir.</string>
+    <string name="himitsu_reading_input">Introduza a leitura em hiragana</string>
+    <string name="himitsu_invalid_reading">Use hiragana para a leitura. O sinal de vogal longa é permitido.</string>
+    <string name="himitsu_reading_restore">Restaurar a leitura original</string>
+    <string name="himitsu_reading_subtitle">Das legendas</string>
+    <string name="himitsu_reading_auto">Gerada automaticamente</string>
+    <string name="himitsu_reading_personal">Correção pessoal</string>
+    <string name="himitsu_reading_unset">Sem leitura</string>
+    <string name="himitsu_save">Guardar</string>
+    <string name="himitsu_cancel">Cancelar</string>
+    <string name="dlsound_supported_subtitles">Selecione um ficheiro de legendas VTT, LRC ou SRT.</string>
+</resources>

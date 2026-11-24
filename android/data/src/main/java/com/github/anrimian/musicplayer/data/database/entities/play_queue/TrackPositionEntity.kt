@@ -27,4 +27,5 @@ class TrackPositionEntity(
     foreignKeys = [ForeignKey(entity = CompositionEntity::class, parentColumns = ["id"],
         childColumns = ["audioId"], onDelete = ForeignKey.CASCADE)]
 )
-class FilePositionEntity(@PrimaryKey val audioId: Long, val trackPosition: Long)
+class FilePositionEntity(@PrimaryKey val audioId: Long, val trackPosition: Long,
+    @androidx.room.ColumnInfo(defaultValue = "0") val lastHeard: Long)

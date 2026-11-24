@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Choisissez un dossier audio, puis touchez une piste pour commencer.</string>
+    <string name="himitsu_audio_error">Lecture impossible. Vérifiez l’accès au fichier ou choisissez une autre piste.</string>
+    <string name="himitsu_directory_permission">L’accès au dossier a expiré. Sélectionnez de nouveau le dossier audio.</string>
+    <string name="himitsu_directory_error">Impossible de lire le dossier. Vérifiez son existence ou choisissez un autre dossier.</string>
+    <string name="himitsu_file_unavailable">La piste précédente est inaccessible. Sélectionnez une piste dans le dossier.</string>
+    <string name="himitsu_subtitle_loading">Lecture des sous-titres…</string>
+    <string name="himitsu_subtitle_folder_needed">Autorisez l’accès au dossier audio pour associer les sous-titres de même nom dans ce dossier et ses sous-dossiers.</string>
+    <string name="himitsu_subtitle_missing">Aucun sous-titre correspondant. Touchez « Sous-titres » pour choisir un fichier.</string>
+    <string name="himitsu_subtitle_empty">Aucun repère temporel valide. Vous pouvez toujours écouter la piste.</string>
+    <string name="himitsu_subtitle_auto">Association automatique</string>
+    <string name="himitsu_subtitle_manual">Sous-titres choisis manuellement</string>
+    <string name="himitsu_subtitle_saved">Sous-titres enregistrés pour la piste choisie.</string>
+    <string name="himitsu_subtitle_error">Sous-titres illisibles. Vérifiez le format ou choisissez un autre fichier.</string>
+    <string name="himitsu_subtitle_large">Le fichier de sous-titres est trop volumineux. Divisez-le par piste.</string>
+    <string name="himitsu_reading_busy">Génération des lectures hors ligne…</string>
+    <string name="himitsu_reading_failed">Les lectures automatiques sont indisponibles. Les lectures des sous-titres et vos corrections restent utilisables.</string>
+    <string name="himitsu_reading_edit">Corriger la lecture</string>
+    <string name="himitsu_reading_none">Ce sous-titre ne contient aucun kanji japonais à corriger.</string>
+    <string name="himitsu_reading_input">Saisissez la lecture en hiragana</string>
+    <string name="himitsu_invalid_reading">Utilisez des hiragana. Le signe de voyelle longue est accepté.</string>
+    <string name="himitsu_reading_restore">Rétablir la lecture d’origine</string>
+    <string name="himitsu_reading_subtitle">Fournie par les sous-titres</string>
+    <string name="himitsu_reading_auto">Générée automatiquement</string>
+    <string name="himitsu_reading_personal">Correction personnelle</string>
+    <string name="himitsu_reading_unset">Lecture absente</string>
+    <string name="himitsu_save">Enregistrer</string>
+    <string name="himitsu_cancel">Annuler</string>
+    <string name="dlsound_supported_subtitles">Choisissez un fichier de sous-titres VTT, LRC ou SRT.</string>
+</resources>

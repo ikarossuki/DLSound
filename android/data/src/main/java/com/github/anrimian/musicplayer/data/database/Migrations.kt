@@ -36,6 +36,15 @@ import java.util.LinkedList
 @SuppressLint("RestrictedApi")
 internal object Migrations {
 
+    val MIGRATION_21_22: Migration = object : Migration(21, 22) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE file_positions ADD COLUMN lastHeard INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("""UPDATE file_positions SET lastHeard = COALESCE((
+                SELECT MAX(p.writeTime) FROM play_queue q JOIN track_positions p ON q.id=p.queueItemId
+                WHERE q.audioId=file_positions.audioId), 0)""")
+        }
+    }
+
     val MIGRATION_20_21: Migration = object : Migration(20, 21) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL("""CREATE TABLE file_positions (audioId INTEGER NOT NULL PRIMARY KEY,

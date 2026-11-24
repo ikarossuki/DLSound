@@ -100,7 +100,7 @@ class PlayQueueRepositoryImpl(
                 startOffset,
                 endOffset
             )
-        }.flatMap { o -> o }
+        }.switchMap { it }
     }
 
     override fun setRandomPlayingEnabled(enabled: Boolean) {
@@ -217,10 +217,7 @@ class PlayQueueRepositoryImpl(
     }
 
     override fun setCurrentItemTrackPosition(trackPosition: Long): Completable {
-        val itemId = uiStatePreferences.currentQueueItemId
-        return Completable.fromAction {
-            playQueueDao.insertTrackPosition(itemId, trackPosition, rememberFile = true)
-        }.subscribeOn(scheduler)
+        return setItemTrackPosition(uiStatePreferences.currentQueueItemId, trackPosition, rememberFile = true)
     }
 
     override fun getCurrentItemTrackPosition(): Single<Long> {
@@ -230,9 +227,9 @@ class PlayQueueRepositoryImpl(
         }.subscribeOn(scheduler)
     }
 
-    override fun setItemTrackPosition(itemId: Long, trackPosition: Long): Completable {
+    override fun setItemTrackPosition(itemId: Long, trackPosition: Long, rememberFile: Boolean): Completable {
         return Completable.fromAction {
-            playQueueDao.insertTrackPosition(itemId, trackPosition)
+            playQueueDao.insertTrackPosition(itemId, trackPosition, rememberFile)
         }.subscribeOn(scheduler)
     }
 

@@ -61,7 +61,7 @@ interface PlayQueueRepository {
 
     fun getCurrentItemTrackPosition(): Single<Long>
 
-    fun setItemTrackPosition(itemId: Long, trackPosition: Long): Completable
+    fun setItemTrackPosition(itemId: Long, trackPosition: Long, rememberFile: Boolean = false): Completable
 
     fun getItemTrackPosition(itemId: Long): Single<Long>
 

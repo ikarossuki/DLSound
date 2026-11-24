@@ -5,6 +5,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 
+import androidx.core.content.ContextCompat;
+
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
 
@@ -29,8 +31,9 @@ public class RxReceivers {
                     emitter.onNext(intent);
                 }
             };
+            // Both users observe AudioService broadcasts from the system UID.
+            ContextCompat.registerReceiver(context, receiver, intentFilter, ContextCompat.RECEIVER_NOT_EXPORTED);
             emitter.setCancellable(() -> context.unregisterReceiver(receiver));
-            context.registerReceiver(receiver, intentFilter);
         });
     }
 }

@@ -19,7 +19,6 @@ package me.zhanghai.android.fastscroll;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.view.ViewGroup;
-import android.webkit.WebView;
 import android.widget.ScrollView;
 import android.widget.TextView;
 
@@ -144,10 +143,6 @@ public class FastScrollerBuilder {
             throw new UnsupportedOperationException("Please use "
                     + FastScrollScrollView.class.getSimpleName() + " instead of "
                     + ScrollView.class.getSimpleName() + "for fast scroll");
-        } else if (mView instanceof WebView) {
-            throw new UnsupportedOperationException("Please use "
-                    + FastScrollWebView.class.getSimpleName() + " instead of "
-                    + WebView.class.getSimpleName() + "for fast scroll");
         } else {
             throw new UnsupportedOperationException(mView.getClass().getSimpleName()
                     + " is not supported for fast scroll");

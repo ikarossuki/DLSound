@@ -32,16 +32,17 @@ abstract class App : Application() {
         val appComponent = Components.getAppComponent()
         appComponent.appLogger().initFatalErrorRecorder()
 
-        if (Permissions.hasFilePermission(this)
-            && !appComponent.loggerRepository().wasCriticalFatalError()
-        ) {
+        val observeLibrary = Permissions.hasFilePermission(this) &&
+                !appComponent.loggerRepository().wasCriticalFatalError()
+        if (observeLibrary) {
             appComponent.widgetUpdater().start()
             appComponent.wearableManager().init()
             appComponent.storageScannerInteractor().runStorageObserver()
-            registerActivityLifecycleCallbacks(
-                AppVisibilityTracker(appComponent.syncInteractor()::onAppVisibilityChanged)
-            )
         }
+        registerActivityLifecycleCallbacks(AppVisibilityTracker { visible ->
+            appComponent.playerCoordinator().onAppVisibilityChanged(visible)
+            if (observeLibrary) appComponent.syncInteractor().onAppVisibilityChanged(visible)
+        })
     }
 
     protected abstract fun initComponents(appContext: Context)

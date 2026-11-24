@@ -51,7 +51,7 @@ internal object TimedTextDecoder {
         return hours * 3_600_000 + remainder
     }
 
-    // Extract text and readings only. Source markup is never passed to the WebView.
+    // Extract text and readings only. The native renderer receives only text and reading spans.
     private val tag = Regex("""<(/?[\p{L}\d][^<>\r\n]*)>""")
     private val escape = Regex("""&(amp|lt|gt|nbsp|lrm|rlm|quot|apos|#\d{1,7}|#[xX][a-fA-F0-9]{1,6});""")
     private fun unescape(text: String): String = escape.replace(text) { match ->

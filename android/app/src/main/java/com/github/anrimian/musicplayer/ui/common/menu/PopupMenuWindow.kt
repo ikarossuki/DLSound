@@ -7,7 +7,6 @@ import android.view.MenuItem
 import android.view.View
 import android.widget.PopupWindow
 import androidx.annotation.MenuRes
-import androidx.appcompat.view.menu.MenuItemImpl
 import androidx.recyclerview.widget.ConcatAdapter
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.viewpager2.widget.ViewPager2
@@ -58,7 +57,7 @@ object PopupMenuWindow {
     @JvmOverloads
     fun showActionBarPopup(
         anchorView: View,
-        items: ArrayList<MenuItemImpl>,
+        items: List<MenuItem>,
         listener: Callback<MenuItem>,
         gravity: Int = Gravity.CENTER,
     ) {

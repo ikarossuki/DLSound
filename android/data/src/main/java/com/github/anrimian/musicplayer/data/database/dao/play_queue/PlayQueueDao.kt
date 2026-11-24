@@ -27,10 +27,10 @@ interface PlayQueueDao {
     ])
     fun getPlayQueueObservable(query: SupportSQLiteQuery): Observable<List<PlayQueueItem>>
 
-    @Query("SELECT id FROM play_queue WHERE position >= :position LIMIT 1")
+    @Query("SELECT id FROM play_queue WHERE position >= :position ORDER BY position LIMIT 1")
     fun getItemIdAtPosition(position: Int): Long?
 
-    @Query("SELECT id FROM play_queue WHERE shuffledPosition >= :position LIMIT 1")
+    @Query("SELECT id FROM play_queue WHERE shuffledPosition >= :position ORDER BY shuffledPosition LIMIT 1")
     fun getItemIdAtShuffledPosition(position: Int): Long?
 
     @RawQuery(observedEntities = [
@@ -66,7 +66,7 @@ interface PlayQueueDao {
     fun exists(id: Long): Boolean
 
     @Query("SELECT * FROM play_queue WHERE id = :id")
-    fun getItem(id: Long): PlayQueueEntity
+    fun getItem(id: Long): PlayQueueEntity?
 
     @Query("SELECT position FROM play_queue WHERE id = :id")
     fun getPositionObservable(id: Long): Observable<Int>
@@ -203,9 +203,9 @@ interface PlayQueueDao {
     """)
     fun insertTrackPosition(itemId: Long, position: Long, time: Long)
 
-    @Query("""INSERT OR REPLACE INTO file_positions(audioId, trackPosition)
-        SELECT audioId, :position FROM play_queue WHERE id = :itemId""")
-    fun rememberFilePosition(itemId: Long, position: Long)
+    @Query("""INSERT OR REPLACE INTO file_positions(audioId, trackPosition, lastHeard)
+        SELECT audioId, :position, :time FROM play_queue WHERE id = :itemId""")
+    fun rememberFilePosition(itemId: Long, position: Long, time: Long)
 
     @Query("""INSERT OR REPLACE INTO track_positions(queueItemId, trackPosition, writeTime)
         SELECT q.id, f.trackPosition, :time FROM play_queue q
@@ -235,17 +235,16 @@ interface PlayQueueDao {
 
         fun getWindowCompositionQuery(
             useFileName: Boolean,
-            isRandom: Boolean,
-            itemsCount: Int
+            isRandom: Boolean
         ): String {
             val pos = if (isRandom) "shuffledPosition" else "position"
             return """
                 SELECT play_queue.id AS itemId,
                 ${CompositionsDao.getCompositionSelectionQuery(useFileName)}
                 FROM play_queue INNER JOIN compositions ON play_queue.audioId = compositions.id 
-                WHERE $pos >= ?
-                ORDER BY $pos
-                LIMIT $itemsCount
+                ORDER BY play_queue.$pos
+                LIMIT ? OFFSET MAX(0, (SELECT COUNT(*) FROM play_queue
+                    WHERE $pos < (SELECT $pos FROM play_queue WHERE id = ?)) - ?)
             """
         }
 

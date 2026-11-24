@@ -1,5 +1,6 @@
 package com.github.anrimian.musicplayer.ui.v12
 
+import com.github.anrimian.musicplayer.data.database.entities.play_queue.FilePositionEntity
 import com.github.anrimian.musicplayer.di.Components
 import com.github.anrimian.musicplayer.domain.models.composition.Composition
 import com.github.anrimian.musicplayer.ui.learning.LearningStore
@@ -12,27 +13,33 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
                              private val tracks: Map<Long,Composition>) {
     private val component = Components.getAppComponent()
     private val playlists = component.playlistsInteractor()
+    private val progress = LibraryProgress(store, component.compositionsDao(), rows)
     private fun identity(row:JSONObject)=JSONArray().put(row.getString("fileName")).put(row.getLong("size")).put(row.getLong("duration")).toString()
+    private fun path(row:JSONObject) = folderPath(row) + "/" + row.optString("fileName")
     private fun uris():Map<Long,String> = rows.keys.chunked(400).flatMap { ids ->
         component.storageSourceRepository().getStorageSources(ids).blockingGet().map { (id,source) -> id to component.contentSourceHelper().createUri(source).toString() }
     }.toMap()
 
-    suspend fun export(prefs:JSONObject,favorites:Set<String>):JSONObject {
+    suspend fun export(prefs:JSONObject,favorites:Set<String>, live: FilePositionEntity? = null):JSONObject {
         val sources=uris()
         val catalog=JSONObject()
         rows.forEach { (id,row) -> catalog.put(id.toString(),JSONObject().put("identity",identity(row))
-            .put("origins",sources[id]?.let(store::backupOrigins) ?: JSONArray())) }
+            .put("path",path(row)).put("origins",sources[id]?.let(store::backupOrigins) ?: JSONArray())) }
         val lists=JSONArray()
         for(list in playlists.getPlaylistsObservable().firstOrError().await()){
             val members=playlists.getCompositionsObservable(list.id,null).firstOrError().await()
             lists.put(JSONObject().put("name",list.name).put("members",JSONArray(members.map { it.id.toString() })))
         }
         return JSONObject().put("format","DLSound/1").put("tracks",catalog).put("favorites",JSONArray(favorites))
-            .put("playlists",lists).put("preferences",prefs).put("readings",store.backupReadings())
+            .put("folderProgress",store.folderPositions.export()).put("progress",progress.export(live)).put("study",store.study.export()).put("playlists",lists).put("preferences",prefs).put("readings",store.backupReadings())
     }
 
     data class Result(val favorites:Set<String>,val preferences:JSONObject,val missing:List<String>)
     companion object {
+        fun folderPath(row:JSONObject):String {
+            val path = "/" + row.optString("folder").trim('/')
+            return if (path == "/sdcard" || path.startsWith("/sdcard/")) "/storage/emulated/0" + path.removePrefix("/sdcard") else path
+        }
         fun mergedFavorites(preferences: android.content.SharedPreferences, imported: Set<String>) =
             preferences.getStringSet("favorites", emptySet()).orEmpty() + imported
     }
@@ -44,6 +51,7 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
                 "theme" -> value in listOf("light", "dark", "system")
                 "language" -> value in listOf("ja", "zh", "both")
                 "repeat" -> value in listOf("off", "one", "all")
+                "librarySort" -> value == "default" || value is String && value.matches(Regex("(title|artist|album|duration)-(asc|desc)"))
                 "font" -> value is Number && value.toDouble() in 16.0..40.0 && value.toDouble() == value.toInt().toDouble()
                 "rubyScale" -> value is Number && value.toDouble() in 0.25..0.75
                 "speed" -> value is Number && value.toDouble() in 0.5..2.0
@@ -56,6 +64,10 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
 
     suspend fun restore(doc:JSONObject):Result {
         require(doc.optString("format")=="DLSound/1") { "无法识别此备份版本" }
+        val folderProgress = if (doc.has("folderProgress")) com.github.anrimian.musicplayer.ui.learning.FolderPositions.read(doc.getJSONArray("folderProgress")) else null
+        val incomingProgress = if (doc.has("progress")) LibraryProgress.read(doc.getJSONArray("progress")) else null
+        val study = if (doc.has("study")) doc.getJSONObject("study").also(store.study::check) else null
+        val trackPaths = mutableMapOf<String,String>()
         val byFile=rows.entries.groupBy { it.value.getString("fileName") to it.value.getLong("size") }
         val catalog=doc.getJSONObject("tracks")
         val sources=uris()
@@ -67,10 +79,11 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
             val key=row.getString("identity")
             val fields=JSONArray(key)
             val matches=byFile[fields.getString(0) to fields.getLong(1)]?.filter { kotlin.math.abs(it.value.getLong("duration")-fields.getLong(2))<=1000 }
-            val id=matches?.singleOrNull()?.key
+            val id=(matches?.singleOrNull { path(it.value) == row.optString("path") } ?: matches?.singleOrNull())?.key
             val origins = row.getJSONArray("origins")
             store.validateOrigins(doc.getJSONObject("readings"), origins)
             if(id==null){missing.add(fields.getString(0)+if(matches.isNullOrEmpty()) "（未找到）" else "（有多个匹配）");continue}
+            if (row.has("path")) trackPaths[row.getString("path")] = path(rows.getValue(id))
             mapped[old]=id
             sources[id]?.let { aliases[it]=origins }
         }
@@ -106,6 +119,9 @@ internal class LibraryBackup(private val store: LearningStore, private val rows:
                     suffix++
                 }
             }
+            study?.let { store.study.merge(it,trackPaths) }
+            if (incomingProgress != null) progress.restore(incomingProgress)
+            if (folderProgress != null) store.folderPositions.merge(folderProgress)
             readingEdit.apply()
         } catch (error: Exception) {
             kotlinx.coroutines.withContext(kotlinx.coroutines.NonCancellable) {

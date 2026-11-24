@@ -37,7 +37,8 @@ class DatabaseManager(
                 Migrations.MIGRATION_17_18,
                 Migrations.getMigration18_19(context, systemAudioCatalogProvider),
                 Migrations.MIGRATION_19_20,
-                Migrations.MIGRATION_20_21
+                Migrations.MIGRATION_20_21,
+                Migrations.MIGRATION_21_22
             )
             .build()
     }

@@ -4,6 +4,10 @@
         <item name="dividerHorizontal">?attr/colorSurfaceVariant</item>
         <item name="disabledColor">?attr/colorOnSurfaceVariant</item>
         <item name="textColorDisabled">?attr/colorOnSurfaceVariant</item>
+        <item name="listItemBackground">?attr/colorSurface</item>
+        <item name="buttonColorInverse">?attr/colorOnSurface</item>
+        <item name="toolbarTextColorPrimary">?attr/colorOnPrimary</item>
+        <item name="popupMenuBackgroundColor">?attr/colorSurface</item>
         <item name="android:fontFamily">sans</item>
         <item name="materialButtonStyle">@style/Widget.Material3.Button.TextButton</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

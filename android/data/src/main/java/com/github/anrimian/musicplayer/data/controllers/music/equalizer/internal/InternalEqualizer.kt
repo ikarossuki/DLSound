@@ -143,7 +143,9 @@ class InternalEqualizer(
         }
         val presets: MutableList<Preset> = ArrayList()
         for (i in 0 until equalizer.numberOfPresets) {
-            val preset = Preset(i.toShort(), equalizer.getPresetName(i.toShort()))
+            // Some effect drivers return fixed-width, NUL-padded preset names.
+            val name = equalizer.getPresetName(i.toShort()).substringBefore('\u0000')
+            val preset = Preset(i.toShort(), name)
             presets.add(preset)
         }
         return EqualizerConfig(lowestRange, highestRange, bands, presets)

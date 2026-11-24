@@ -81,6 +81,9 @@ class LibraryPlayerInteractor(
         .replay(1)
         .refCount()
 
+    private var lastCheckpointNanos = 0L
+    private var checkpointItem: Long? = null
+    private var playbackRunning = false
     private var currentItem: PlayQueueItem? = null
 
     fun prepare() {
@@ -430,7 +433,18 @@ class LibraryPlayerInteractor(
         )
         playerEventsDisposable.add(
             playerCoordinatorInteractor.getTrackPositionObservable(PlayerType.LIBRARY)
-                .subscribe(trackPositionSubject::onNext)
+                .subscribe { position ->
+                    trackPositionSubject.onNext(position)
+                    val item = currentItem ?: return@subscribe
+                    val now = System.nanoTime()
+                    if (playbackRunning && position > 0 &&
+                        (checkpointItem != item.itemId || now - lastCheckpointNanos >= 5_000_000_000L) &&
+                        playerCoordinatorInteractor.isPlayingLibrarySource(item.id)) {
+                        lastCheckpointNanos = now
+                        checkpointItem = item.itemId
+                        savePlayedPosition(item.itemId, position).subscribe()
+                    }
+                }
         )
     }
 
@@ -567,13 +581,18 @@ class LibraryPlayerInteractor(
     }
 
     private fun onPlayerStateChanged(playerState: PlayerState): Completable? {
+        playbackRunning = playerState == PlayerState.PLAY
         return when(playerState) {
             PlayerState.STOP -> {
                 trackPositionSubject.onNext(0)
                 saveCurrentItemTrackPosition(0)
             }
             PlayerState.PAUSE -> {
-                getActualTrackPosition().flatMapCompletable(this::saveCurrentItemTrackPosition)
+                val item = currentItem ?: return null
+                getActualTrackPosition().flatMapCompletable { position ->
+                    if (currentItem?.itemId == item.itemId) savePlayedPosition(item.itemId, position)
+                    else Completable.complete()
+                }
             }
             else -> null
         }
@@ -593,7 +612,7 @@ class LibraryPlayerInteractor(
             } else {
                 trackPosition
             }
-            saveCurrentItemTrackPosition(positionToSave)
+            savePlayedPosition(composition.itemId, positionToSave)
         }.flatMapCompletable { c -> c }
     }
 
@@ -604,7 +623,13 @@ class LibraryPlayerInteractor(
     }
 
     private fun resetItemTrackPosition(itemId: Long): Completable {
-        return playQueueRepository.setItemTrackPosition(itemId, 0L)
+        return setItemPosition(itemId, 0L, false)
+    }
+
+    private fun savePlayedPosition(itemId: Long, position: Long) = setItemPosition(itemId, position, true)
+
+    private fun setItemPosition(itemId: Long, position: Long, rememberFile: Boolean): Completable {
+        return playQueueRepository.setItemTrackPosition(itemId, position, rememberFile)
             .doOnError(analytics::processNonFatalError)
             .onErrorComplete()
     }

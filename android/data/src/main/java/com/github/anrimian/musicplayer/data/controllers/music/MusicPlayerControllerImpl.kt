@@ -119,8 +119,8 @@ class MusicPlayerControllerImpl(
         mediaPlayer.setSkipSilenceEnabled(enabled)
     }
 
-    override fun getTrackPositionObservable(): Observable<Long> {
-        return mediaPlayer.getTrackPositionObservable()
+    override fun getTrackPositionObservable(intervalMs: Long): Observable<Long> {
+        return mediaPlayer.getTrackPositionObservable(intervalMs)
     }
 
     override fun getPlayerEventsObservable(): Observable<MediaPlayerEvent> {

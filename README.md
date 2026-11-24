@@ -5,7 +5,9 @@
 > <ruby>明日<rp>（</rp><rt>あした</rt><rp>）</rp></ruby>、また。<br>
 > 明天见。
 
-**[下载 Android APK](https://github.com/ikarossuki/DLSound/releases/latest)**　适用于 Android 8.0 及以上。Android 8 已验证系统 WebView 69；更旧的内核可通过设备的应用商店更新 Android System WebView 或 Chrome。在发布页的 **Assets** 中选择扩展名为 `.apk` 的文件。[1.3.7 更新说明](docs/releases/v1.3.7.md)
+**[下载 Android APK](https://github.com/ikarossuki/DLSound/releases/latest)**　适用于 Android 8.0 及以上。在发布页的 **Assets** 中选择 `DLSound-1.4.3.apk`。[1.4.3 更新说明](docs/releases/v1.4.3.md)
+
+1.4.3 使用 Kotlin 原生播放器，减少锁屏播放和暂停时的进度采样。升级时可补回旧版作品资料，切换音轨时的续听记录和手选文件夹的书签也有修复。
 
 ## 播放自己的音频和字幕
 
@@ -35,7 +37,7 @@ GitHub 发布的 1.3.4 使用新签名，无法覆盖安装早期本地 1.3.3 �
 <details>
 <summary>展开构建环境、依赖与命令</summary>
 
-使用 JDK 21、Android SDK Platform 37、Build Tools 37.0.0 和仓库中的 Gradle 9.5.1 Wrapper。界面资源已包含在源码内。要修改界面，请在 `web-ui/` 使用 Node 24、运行 `npm ci`、`npm test` 和 `npm run build`。
+使用 JDK 21、Android SDK Platform 37、Build Tools 37.0.0 和仓库中的 Gradle 9.5.1 Wrapper。界面、歌词排版和播放交互均位于 Android 应用模块，使用同一条 Gradle 命令构建。
 
 把 Maven Central 的 [kuromoji-core 0.9.0](https://repo.maven.apache.org/maven2/com/atilika/kuromoji/kuromoji-core/0.9.0/kuromoji-core-0.9.0.jar) 和 [kuromoji-ipadic 0.9.0](https://repo.maven.apache.org/maven2/com/atilika/kuromoji/kuromoji-ipadic/0.9.0/kuromoji-ipadic-0.9.0.jar) 放在仓库根目录的 `downloads/kuromoji/` 下，保留原文件名。两份 JAR 的 SHA-256 分别为 `9dec317cab2879474d39bffea4f3f481288d87952c9b5e19d6897b0d5e0d3613` 和 `24909fd751c0b439f7af5131b080eb65bc85062f0c4977ca4a71c76abe74e0b6`。
 
@@ -50,4 +52,4 @@ GitHub 发布的 1.3.4 使用新签名，无法覆盖安装早期本地 1.3.3 �
 
 ## 开源声明
 
-播放器基于 [Anrimian/music-player v1.0.3](https://github.com/Anrimian/music-player/tree/5b373722e4fea18b37317e74c424a98bcea3f01c)，遵循 [GPL-3.0-or-later](android/LICENSE)。[Kuromoji 许可证](licenses/kuromoji/LICENSE.md)、[词典声明](licenses/kuromoji/NOTICE.md)和[前端依赖声明](web-ui/THIRD_PARTY_NOTICES.md)随源码提供。测试用静音 MP3 由合成帧生成。
+播放器基于 [Anrimian/music-player v1.0.3](https://github.com/Anrimian/music-player/tree/5b373722e4fea18b37317e74c424a98bcea3f01c)，遵循 [GPL-3.0-or-later](android/LICENSE)。[Kuromoji 许可证](licenses/kuromoji/LICENSE.md)及[词典声明](licenses/kuromoji/NOTICE.md)随源码和安装包提供。测试用静音 MP3 由合成帧生成。

@@ -142,9 +142,8 @@ class AndroidMediaPlayer(
         applyVolume()
     }
 
-    override fun getTrackPositionObservable(): Observable<Long> {
-        return Observable.interval(0, 50, TimeUnit.MILLISECONDS)
-            .observeOn(ioScheduler)
+    override fun getTrackPositionObservable(intervalMs: Long): Observable<Long> {
+        return Observable.interval(0, intervalMs, TimeUnit.MILLISECONDS, ioScheduler)
             .flatMapSingle { getTrackPosition() }
     }
 

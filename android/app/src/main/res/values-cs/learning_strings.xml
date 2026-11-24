@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Vyberte složku se zvukem a klepnutím na skladbu začněte.</string>
+    <string name="himitsu_audio_error">Zvuk nelze přehrát. Ověřte přístup k souboru nebo vyberte jinou skladbu.</string>
+    <string name="himitsu_directory_permission">Platnost přístupu ke složce vypršela. Vyberte složku se zvukem znovu.</string>
+    <string name="himitsu_directory_error">Složku nelze přečíst. Ověřte, zda stále existuje, nebo vyberte jinou.</string>
+    <string name="himitsu_file_unavailable">Předchozí skladba není dostupná. Vyberte skladbu ve složce znovu.</string>
+    <string name="himitsu_subtitle_loading">Načítání titulků…</string>
+    <string name="himitsu_subtitle_folder_needed">Povolte přístup ke složce se zvukem. Přehrávač v ní a jejích podsložkách vyhledá titulky se stejným názvem.</string>
+    <string name="himitsu_subtitle_missing">Titulky se stejným názvem nebyly nalezeny. Klepnutím na Titulky vyberte soubor.</string>
+    <string name="himitsu_subtitle_empty">Titulky nemají platné časové značky. Zvuk lze nadále přehrávat.</string>
+    <string name="himitsu_subtitle_auto">Automatické přiřazení</string>
+    <string name="himitsu_subtitle_manual">Ručně vybrané titulky</string>
+    <string name="himitsu_subtitle_saved">Titulky byly uloženy pro vybranou skladbu.</string>
+    <string name="himitsu_subtitle_error">Titulky nelze přečíst. Zkontrolujte formát nebo vyberte jiný soubor.</string>
+    <string name="himitsu_subtitle_large">Soubor s titulky je příliš velký. Rozdělte jej podle skladeb.</string>
+    <string name="himitsu_reading_busy">Vytváření výslovnosti bez připojení…</string>
+    <string name="himitsu_reading_failed">Automatická výslovnost není dostupná. Výslovnost z titulků a vaše opravy lze stále používat.</string>
+    <string name="himitsu_reading_edit">Opravit výslovnost</string>
+    <string name="himitsu_reading_none">V tomto titulku není žádné japonské kandži k opravě.</string>
+    <string name="himitsu_reading_input">Zadejte výslovnost hiraganou</string>
+    <string name="himitsu_invalid_reading">Použijte hiraganu. Znaménko pro dlouhou samohlásku je povoleno.</string>
+    <string name="himitsu_reading_restore">Obnovit původní výslovnost</string>
+    <string name="himitsu_reading_subtitle">Z titulků</string>
+    <string name="himitsu_reading_auto">Vytvořeno automaticky</string>
+    <string name="himitsu_reading_personal">Vlastní oprava</string>
+    <string name="himitsu_reading_unset">Výslovnost neuvedena</string>
+    <string name="himitsu_save">Uložit</string>
+    <string name="himitsu_cancel">Zrušit</string>
+    <string name="dlsound_supported_subtitles">Vyberte soubor titulků VTT, LRC nebo SRT.</string>
+</resources>

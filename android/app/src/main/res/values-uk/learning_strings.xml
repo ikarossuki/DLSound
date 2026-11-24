@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Виберіть теку з аудіо й торкніться доріжки, щоб почати.</string>
+    <string name="himitsu_audio_error">Не вдалося відтворити аудіо. Перевірте доступ до файлу або виберіть іншу доріжку.</string>
+    <string name="himitsu_directory_permission">Термін доступу до теки минув. Виберіть теку з аудіо ще раз.</string>
+    <string name="himitsu_directory_error">Не вдалося прочитати теку. Перевірте, чи вона існує, або виберіть іншу.</string>
+    <string name="himitsu_file_unavailable">Попередня доріжка недоступна. Виберіть доріжку в теці ще раз.</string>
+    <string name="himitsu_subtitle_loading">Читання субтитрів…</string>
+    <string name="himitsu_subtitle_folder_needed">Дозвольте доступ до теки з аудіо, щоб знаходити однойменні субтитри в ній та у вкладених теках.</string>
+    <string name="himitsu_subtitle_missing">Однойменних субтитрів не знайдено. Торкніться пункту «Субтитри», щоб вибрати файл.</string>
+    <string name="himitsu_subtitle_empty">У субтитрах немає придатних часових позначок. Аудіо можна слухати далі.</string>
+    <string name="himitsu_subtitle_auto">Автоматичний добір</string>
+    <string name="himitsu_subtitle_manual">Субтитри вибрано вручну</string>
+    <string name="himitsu_subtitle_saved">Субтитри збережено для вибраної доріжки.</string>
+    <string name="himitsu_subtitle_error">Не вдалося прочитати субтитри. Перевірте формат або виберіть інший файл.</string>
+    <string name="himitsu_subtitle_large">Файл субтитрів завеликий. Розділіть його за доріжками.</string>
+    <string name="himitsu_reading_busy">Створення варіантів читання без інтернету…</string>
+    <string name="himitsu_reading_failed">Автоматичне читання недоступне. Читання із субтитрів і ваші виправлення працюють і надалі.</string>
+    <string name="himitsu_reading_edit">Виправити читання</string>
+    <string name="himitsu_reading_none">У цих субтитрах немає японських кандзі для виправлення.</string>
+    <string name="himitsu_reading_input">Введіть читання хіраґаною</string>
+    <string name="himitsu_invalid_reading">Запишіть читання хіраґаною. Можна використовувати знак довгої голосної.</string>
+    <string name="himitsu_reading_restore">Відновити початкове читання</string>
+    <string name="himitsu_reading_subtitle">Із субтитрів</string>
+    <string name="himitsu_reading_auto">Створено автоматично</string>
+    <string name="himitsu_reading_personal">Особисте виправлення</string>
+    <string name="himitsu_reading_unset">Читання не вказано</string>
+    <string name="himitsu_save">Зберегти</string>
+    <string name="himitsu_cancel">Скасувати</string>
+    <string name="dlsound_supported_subtitles">Виберіть файл субтитрів VTT, LRC або SRT.</string>
+</resources>

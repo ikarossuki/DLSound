@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Bir ses klasörü seçin ve başlamak için bir parçaya dokunun.</string>
+    <string name="himitsu_audio_error">Ses çalınamıyor. Dosyaya erişimi kontrol edin veya başka bir parça seçin.</string>
+    <string name="himitsu_directory_permission">Klasör erişiminin süresi doldu. Ses klasörünü yeniden seçin.</string>
+    <string name="himitsu_directory_error">Klasör okunamıyor. Hâlâ var olduğunu kontrol edin veya başka bir klasör seçin.</string>
+    <string name="himitsu_file_unavailable">Önceki parçaya erişilemiyor. Klasörden tekrar bir parça seçin.</string>
+    <string name="himitsu_subtitle_loading">Altyazılar okunuyor…</string>
+    <string name="himitsu_subtitle_folder_needed">Bu klasörde ve alt klasörlerinde aynı adlı altyazıları bulmak için ses klasörüne erişim izni verin.</string>
+    <string name="himitsu_subtitle_missing">Aynı adlı altyazı bulunamadı. Dosya seçmek için Altyazılar seçeneğine dokunun.</string>
+    <string name="himitsu_subtitle_empty">Altyazıda geçerli zaman damgası yok. Ses çalınmaya devam edebilir.</string>
+    <string name="himitsu_subtitle_auto">Otomatik eşleştirme</string>
+    <string name="himitsu_subtitle_manual">Elle seçilen altyazı</string>
+    <string name="himitsu_subtitle_saved">Altyazı seçilen parça için kaydedildi.</string>
+    <string name="himitsu_subtitle_error">Altyazı okunamıyor. Biçimi kontrol edin veya başka bir dosya seçin.</string>
+    <string name="himitsu_subtitle_large">Altyazı dosyası çok büyük. Dosyayı parçalara göre bölün.</string>
+    <string name="himitsu_reading_busy">Okunuşlar çevrimdışı oluşturuluyor…</string>
+    <string name="himitsu_reading_failed">Otomatik okunuşlar kullanılamıyor. Altyazıdaki okunuşlar ve düzeltmeleriniz kullanılabilir.</string>
+    <string name="himitsu_reading_edit">Okunuşu düzelt</string>
+    <string name="himitsu_reading_none">Bu altyazıda düzeltilebilecek Japonca kanji yok.</string>
+    <string name="himitsu_reading_input">Okunuşu hiragana ile girin</string>
+    <string name="himitsu_invalid_reading">Okunuşu hiragana ile yazın. Uzun ünlü işaretini kullanabilirsiniz.</string>
+    <string name="himitsu_reading_restore">Özgün okunuşu geri yükle</string>
+    <string name="himitsu_reading_subtitle">Altyazıdan</string>
+    <string name="himitsu_reading_auto">Otomatik oluşturuldu</string>
+    <string name="himitsu_reading_personal">Kişisel düzeltme</string>
+    <string name="himitsu_reading_unset">Okunuş belirtilmemiş</string>
+    <string name="himitsu_save">Kaydet</string>
+    <string name="himitsu_cancel">İptal</string>
+    <string name="dlsound_supported_subtitles">VTT, LRC veya SRT biçiminde bir altyazı dosyası seçin.</string>
+</resources>

@@ -4,6 +4,34 @@ import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
 
 class TimedTextSubtitleTest {
+    @Test fun practiceUsesOriginalSentencesOffsetAndDuration() {
+        val ja = SubtitleFiles.decode("[00:01]あした\n[00:03]またね")
+        val zh = SubtitleFiles.decode("[00:00]明天\n[00:02]再见")
+        val doc = SubtitlePair.combine(ja, zh)
+        assertEquals(listOf(1250L..3250L, 3250L..5000L), doc.practiceSentences(0, 5000, 250))
+        assertEquals(listOf(3250L..5000L), doc.practiceSentences(4000, 5000, 250))
+        assertTrue(doc.practiceSentences(5000, 5000, 250).isEmpty())
+    }
+    @Test fun parallelFilesKeepIndependentBoundariesAndRuby() {
+        val ja = SubtitleFiles.decode("WEBVTT\n\n00:00.000 --> 00:04.000\n<ruby>明日<rt>あした</rt></ruby>。")
+        val zh = SubtitleFiles.decode("1\n00:00:01,000 --> 00:00:02,000\n明天。\n\n2\n00:00:05,000 --> 00:00:06,000\n后来。")
+        val result = SubtitlePair.combine(ja,zh)
+        fun active(ms:Long) = result.cues.filter { it.activeAt(ms) }
+        assertEquals("あした",active(0).single().japanese.first().reading)
+        assertEquals(listOf(null,"明天。"),active(1000).map { it.chinese })
+        assertNull(active(2000).single().chinese)
+        assertTrue(active(4500).isEmpty())
+        assertEquals("后来。",active(5000).single().chinese)
+    }
+    @Test fun customPairRulesAndExactIntervals() {
+        val files = listOf(file("01.orig.vtt"),file("01.cn.srt"),file("02.ja.vtt"),file("02.zh.srt"))
+        assertEquals("01.cn.srt",SubtitlePair.match("01.wav",files,listOf(".orig.vtt",".cn.srt"))?.second?.name)
+        assertEquals("02.ja.vtt",SubtitlePair.match("02.mp3",files)?.first?.name)
+        assertNull(SubtitlePair.match("01.wav",files))
+        val pair=SubtitlePair.combine(SubtitleFiles.decode("[00:01]あした"),SubtitleFiles.decode("[00:01]明天"))
+        assertEquals("明天",pair.cues.single().chinese)
+        assertEquals("あした",pair.cues.single().japaneseText)
+    }
     private val vtt = """
         WEBVTT
 
@@ -31,11 +59,19 @@ class TimedTextSubtitleTest {
     }
 
     @Test fun selectionHasStablePriorityAndSkipsUnrelatedFiles() {
-        val names = listOf("A.srt", "A.lrc", "A.vtt", "A.hms.json")
+        val names = listOf("A.srt", "A.lrc", "A.vtt")
         names.indices.forEach { index ->
             assertEquals(names[index], SubtitleFiles.match("A.wav", names.take(index + 1).map { file(it) })?.name)
         }
+        assertEquals("A.vtt", SubtitleFiles.match("A.wav", (names + "A.hms.json").map { file(it) })?.name)
+        assertNull(SubtitleFiles.match("A.wav", listOf(file("A.hms.json"))))
         assertNull(SubtitleFiles.match("B.mp3", names.map { file(it) }))
+    }
+
+    @Test fun archivedSubtitleFormatIsRejectedByNameAndContent() {
+        assertEquals("retired", assertThrows(SubtitleFormatException::class.java) { SubtitleFiles.decode(vtt,"old.hms.JSON") }.problem)
+        assertEquals("retired", assertThrows(SubtitleFormatException::class.java) { SubtitleFiles.decode("\uFEFF  {\"format\":\"himitsu-subtitles\"}") }.problem)
+        assertNull(SubtitlePair.match("01.wav",listOf(file("01.a.json"),file("01.b.srt")),listOf(".a.json",".b.srt")))
     }
 
     @Test fun taggedVttSeparatesTranslationAndExplicitReading() {
@@ -79,9 +115,9 @@ class TimedTextSubtitleTest {
         assertEquals(listOf(WrittenPiece("山", "やま"), WrittenPiece("道", "みち"), WrittenPiece("<先>")), cue.japanese)
     }
 
-    @Test fun existingJsonAndLrcRemainReadableByContent() {
-        val json = """{"format":"himitsu-subtitles","version":1,"documentId":"old","cues":[{"id":"a","kind":"dialogue","startMs":0,"ja":"空","zh":"天空"}]}"""
-        assertEquals("天空", SubtitleFiles.decode(json).cues.single().chinese)
+    @Test fun retiredJsonIsRejectedAndLrcWithAnArrowStillParses() {
+        val json = checkNotNull(javaClass.getResource("/legacy-subtitles/learning-example.hms.json")).readText()
+        assertEquals("retired", assertThrows(SubtitleFormatException::class.java) { SubtitleFiles.decode(json) }.problem)
         assertEquals("A --> B", SubtitleFiles.decode("[00:01]A --> B").cues.single().japaneseText)
     }
 }

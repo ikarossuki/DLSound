@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Επιλέξτε φάκελο ήχου και πατήστε ένα κομμάτι για να ξεκινήσετε.</string>
+    <string name="himitsu_audio_error">Δεν είναι δυνατή η αναπαραγωγή. Ελέγξτε την πρόσβαση στο αρχείο ή επιλέξτε άλλο κομμάτι.</string>
+    <string name="himitsu_directory_permission">Η πρόσβαση στον φάκελο έληξε. Επιλέξτε ξανά τον φάκελο ήχου.</string>
+    <string name="himitsu_directory_error">Δεν είναι δυνατή η ανάγνωση του φακέλου. Ελέγξτε αν υπάρχει ή επιλέξτε άλλον.</string>
+    <string name="himitsu_file_unavailable">Το προηγούμενο κομμάτι δεν είναι διαθέσιμο. Επιλέξτε ξανά κομμάτι από τον φάκελο.</string>
+    <string name="himitsu_subtitle_loading">Ανάγνωση υποτίτλων…</string>
+    <string name="himitsu_subtitle_folder_needed">Επιτρέψτε την πρόσβαση στον φάκελο ήχου για να εντοπίζονται ομώνυμοι υπότιτλοι στον φάκελο και στους υποφακέλους του.</string>
+    <string name="himitsu_subtitle_missing">Δεν βρέθηκαν ομώνυμοι υπότιτλοι. Πατήστε «Υπότιτλοι» για να επιλέξετε αρχείο.</string>
+    <string name="himitsu_subtitle_empty">Οι υπότιτλοι δεν έχουν έγκυρες χρονικές σημάνσεις. Η αναπαραγωγή ήχου παραμένει διαθέσιμη.</string>
+    <string name="himitsu_subtitle_auto">Αυτόματη αντιστοίχιση</string>
+    <string name="himitsu_subtitle_manual">Χειροκίνητη επιλογή υποτίτλων</string>
+    <string name="himitsu_subtitle_saved">Οι υπότιτλοι αποθηκεύτηκαν για το επιλεγμένο κομμάτι.</string>
+    <string name="himitsu_subtitle_error">Οι υπότιτλοι δεν διαβάζονται. Ελέγξτε τη μορφή ή επιλέξτε άλλο αρχείο.</string>
+    <string name="himitsu_subtitle_large">Το αρχείο υποτίτλων είναι πολύ μεγάλο. Χωρίστε το ανά κομμάτι.</string>
+    <string name="himitsu_reading_busy">Δημιουργία προφοράς εκτός σύνδεσης…</string>
+    <string name="himitsu_reading_failed">Η αυτόματη προφορά δεν είναι διαθέσιμη. Οι προφορές από τους υποτίτλους και οι διορθώσεις σας παραμένουν διαθέσιμες.</string>
+    <string name="himitsu_reading_edit">Διόρθωση προφοράς</string>
+    <string name="himitsu_reading_none">Δεν υπάρχουν ιαπωνικά κάντζι για διόρθωση σε αυτόν τον υπότιτλο.</string>
+    <string name="himitsu_reading_input">Πληκτρολογήστε την προφορά με χιραγκάνα</string>
+    <string name="himitsu_invalid_reading">Χρησιμοποιήστε χιραγκάνα. Επιτρέπεται το σύμβολο μακρού φωνήεντος.</string>
+    <string name="himitsu_reading_restore">Επαναφορά αρχικής προφοράς</string>
+    <string name="himitsu_reading_subtitle">Από τους υποτίτλους</string>
+    <string name="himitsu_reading_auto">Αυτόματη δημιουργία</string>
+    <string name="himitsu_reading_personal">Προσωπική διόρθωση</string>
+    <string name="himitsu_reading_unset">Χωρίς προφορά</string>
+    <string name="himitsu_save">Αποθήκευση</string>
+    <string name="himitsu_cancel">Ακύρωση</string>
+    <string name="dlsound_supported_subtitles">Επιλέξτε αρχείο υποτίτλων VTT, LRC ή SRT.</string>
+</resources>

@@ -36,7 +36,7 @@ interface AppMediaPlayer {
 
     fun setSkipSilenceEnabled(enabled: Boolean)
 
-    fun getTrackPositionObservable(): Observable<Long>
+    fun getTrackPositionObservable(intervalMs: Long): Observable<Long>
 
     fun getPlayerEventsObservable(): Observable<MediaPlayerEvent>
 

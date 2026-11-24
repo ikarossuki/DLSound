@@ -18,6 +18,7 @@ import io.reactivex.rxjava3.core.Completable
 import io.reactivex.rxjava3.core.Single
 import io.reactivex.rxjava3.schedulers.TestScheduler
 import io.reactivex.rxjava3.subjects.PublishSubject
+import io.reactivex.rxjava3.subjects.SingleSubject
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -91,12 +92,59 @@ class PlayerInteractorTest {
         whenever(settingsRepository.isPauseOnAudioDeviceRemoveEnabled).thenReturn(true)
 
         whenever(musicPlayerController.prepareToPlay(any())).thenReturn(Completable.complete())
-        whenever(musicPlayerController.getTrackPositionObservable()).thenReturn(positionSubject)
+        whenever(musicPlayerController.getTrackPositionObservable(any())).thenReturn(positionSubject)
+        whenever(musicPlayerController.getTrackPosition()).thenReturn(Single.never())
 
         whenever(compositionSourceInteractor.getCompositionSource(any()))
             .thenReturn(Single.just(testContentSource))
 
         whenever(playerErrorParser.parseError(any())).thenReturn(mock())
+    }
+
+    @Test
+    fun `only a visible screen or active repeat needs the precise clock`() {
+        val periods = mutableListOf<Long>()
+        whenever(musicPlayerController.getTrackPositionObservable(any())).thenAnswer {
+            periods.add(it.getArgument<Long>(0))
+            positionSubject
+        }
+        playerInteractor.prepareToPlay(testSource, 0)
+        playerInteractor.onAppVisibilityChanged(true)
+        org.junit.jupiter.api.Assertions.assertTrue(periods.isEmpty())
+        playerInteractor.play()
+        playerInteractor.onAppVisibilityChanged(false)
+        playerInteractor.listenFrom(1000, 2000, 3)
+        positionSubject.onNext(2000)
+        playerInteractor.onAppVisibilityChanged(true)
+        playerInteractor.onAppVisibilityChanged(false)
+        playerInteractor.clearListeningRange()
+        playerInteractor.pause()
+        playerInteractor.onAppVisibilityChanged(true)
+        org.junit.jupiter.api.Assertions.assertEquals(listOf(50L, 1000L, 50L, 1000L), periods)
+        org.junit.jupiter.api.Assertions.assertFalse(positionSubject.hasObservers())
+    }
+
+    @Test
+    fun `background pause publishes the decoder position without leaving a timer`() {
+        whenever(musicPlayerController.getTrackPosition()).thenReturn(Single.just(1742L))
+        playerInteractor.prepareToPlay(testSource, 0)
+        playerInteractor.play()
+        positionSubject.onNext(1000)
+        playerInteractor.pause()
+        positionSubscriber.assertValues(0, 1000, 1742)
+        org.junit.jupiter.api.Assertions.assertFalse(positionSubject.hasObservers())
+    }
+
+    @Test
+    fun `a paused seek supersedes an outstanding decoder read`() {
+        val read = SingleSubject.create<Long>()
+        whenever(musicPlayerController.getTrackPosition()).thenReturn(read)
+        playerInteractor.prepareToPlay(testSource, 0)
+        playerInteractor.play()
+        playerInteractor.pause()
+        playerInteractor.onSeekFinished(3200)
+        read.onSuccess(1000)
+        positionSubscriber.assertValues(0, 3200)
     }
 
     @Test
@@ -111,6 +159,22 @@ class PlayerInteractorTest {
         playerInteractor.observeListeningRange().test().assertValue(Opt())
         positionSubject.onNext(2100)
         positionSubscriber.assertValueAt(positionSubscriber.values().size - 1, 2100L)
+    }
+
+    @Test
+    fun `each sentence gets three passes and switching tracks cancels the sequence`() {
+        playerInteractor.prepareToPlay(testSource, 0)
+        val sentences = listOf(100L..500L, 900L..1300L)
+        playerInteractor.listenToSentences(sentences, 3)
+        repeat(3) { positionSubject.onNext(500) }
+        playerInteractor.observeListeningRange().test().assertValue { it.value?.sentence == 2 && it.value?.passes == 3 }
+        repeat(3) { positionSubject.onNext(1300) }
+        verify(musicPlayerController, times(3)).seekTo(100)
+        verify(musicPlayerController, times(3)).seekTo(900)
+        playerInteractor.observeListeningRange().test().assertValue(Opt())
+        playerInteractor.listenToSentences(sentences, 3)
+        playerInteractor.prepareToPlay(mock(), 0)
+        playerInteractor.observeListeningRange().test().assertValue(Opt())
     }
 
     @Test

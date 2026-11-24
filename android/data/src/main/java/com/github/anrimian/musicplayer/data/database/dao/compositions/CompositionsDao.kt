@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import androidx.room.Dao
 import androidx.room.MapColumn
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.RawQuery
 import androidx.room.util.appendPlaceholders
 import androidx.sqlite.db.SimpleSQLiteQuery
@@ -13,6 +14,7 @@ import com.github.anrimian.musicplayer.data.database.entities.albums.AlbumEntity
 import com.github.anrimian.musicplayer.data.database.entities.artist.ArtistEntity
 import com.github.anrimian.musicplayer.data.database.entities.composition.CompositionEntity
 import com.github.anrimian.musicplayer.data.database.entities.folder.FolderEntity
+import com.github.anrimian.musicplayer.data.database.entities.play_queue.FilePositionEntity
 import com.github.anrimian.musicplayer.data.models.composition.ExternalComposition
 import com.github.anrimian.musicplayer.data.storage.providers.music.DBComposition
 import com.github.anrimian.musicplayer.domain.Constants
@@ -42,6 +44,24 @@ interface CompositionsDao {
         (SELECT artists.name FROM albums JOIN artists ON artists.id = albums.artistId WHERE albums.id = c.albumId) AS albumArtist FROM compositions c JOIN paths p ON p.id = c.folderId
     WHERE c.storageId IS NOT NULL""")
     fun getLibraryFileLocations(): List<LibraryFileLocation>
+
+    @Query("""SELECT * FROM file_positions WHERE audioId IN (:ids) AND lastHeard > 0
+        ORDER BY lastHeard DESC, audioId DESC LIMIT 1""")
+    fun latestHeard(ids: List<Long>): FilePositionEntity?
+
+    @Query("SELECT * FROM file_positions")
+    fun filePositions(): List<FilePositionEntity>
+
+    // INSERT ... SELECT also works on the SQLite version shipped with Android 8.
+    @Query("""INSERT OR REPLACE INTO file_positions(audioId, trackPosition, lastHeard)
+        SELECT id, :position, :heard FROM compositions WHERE id = :audioId AND NOT EXISTS
+        (SELECT 1 FROM file_positions WHERE audioId = :audioId AND lastHeard >= :heard)""")
+    fun restorePositionIfNewer(audioId: Long, position: Long, heard: Long)
+
+    @Transaction
+    fun restorePositions(records: List<FilePositionEntity>) {
+        for (record in records) restorePositionIfNewer(record.audioId, record.trackPosition, record.lastHeard)
+    }
 
     @Query("""SELECT l.id AS listId, l.name, e.audioId, e.itemId AS entryId FROM play_lists l
         LEFT JOIN play_lists_entries e ON e.playListId = l.id

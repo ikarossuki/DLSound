@@ -38,10 +38,8 @@ class PlayQueueDaoWrapper(
         startOffset: Int,
         endOffset: Int
     ): Observable<List<PlayQueueItem>> {
-        val position = getPosition(itemId, isRandom) - startOffset//TODO-W handle negative value
-        val itemsCount = endOffset + startOffset
-        val query = PlayQueueDao.getWindowCompositionQuery(useFileName, isRandom, itemsCount)
-        val sqlQuery = SimpleSQLiteQuery(query, arrayOf(position))
+        val query = PlayQueueDao.getWindowCompositionQuery(useFileName, isRandom)
+        val sqlQuery = SimpleSQLiteQuery(query, arrayOf<Any>(endOffset.toLong() + startOffset, itemId, startOffset))
         return playQueueDao.getPlayQueueObservable(sqlQuery)
     }
 
@@ -107,6 +105,7 @@ class PlayQueueDaoWrapper(
                 playQueueDao.getItemIdAtPosition(targetPosition)!!
             }
             playQueueDao.restoreFilePosition(selectedItem, System.currentTimeMillis())
+            deletedItem = null
             selectedItem
         }
     }
@@ -120,15 +119,34 @@ class PlayQueueDaoWrapper(
     }
 
     fun deleteItem(itemId: Long) {
-        deletedItem = playQueueDao.getItem(itemId)
-        playQueueDao.deleteItem(itemId)
+        libraryDatabase.runInTransaction {
+            val item = playQueueDao.getItem(itemId) ?: return@runInTransaction
+            playQueueDao.deleteItem(itemId)
+            deletedItem = item
+        }
     }
 
-    fun restoreDeletedItem(): Long? {
-        if (deletedItem != null) {
-            return playQueueDao.insertItem(deletedItem!!)
+    fun restoreDeletedItem(): Long? = libraryDatabase.runInTransaction<Long?> {
+        val item = deletedItem ?: return@runInTransaction null
+        if (!libraryDatabase.compositionsDao().exists(item.audioId)) {
+            deletedItem = null
+            return@runInTransaction null
         }
-        return null
+        reservePosition(item.position, false)
+        reservePosition(item.shuffledPosition, true)
+        playQueueDao.insertItem(item).also { deletedItem = null }
+    }
+
+    /** Make room if a later insertion filled the vacancy before the user pressed Undo. */
+    private fun reservePosition(start: Int, shuffled: Boolean) {
+        val next = if (shuffled) playQueueDao::getItemIdAtShuffledPosition else playQueueDao::getItemIdAtPosition
+        val position = if (shuffled) playQueueDao::getShuffledPosition else playQueueDao::getPosition
+        val shift = if (shuffled) playQueueDao::increaseShuffledPosition else playQueueDao::increasePosition
+        var vacant = start
+        while (next(vacant)?.let(position) == vacant) {
+            vacant++
+        }
+        for (slot in vacant - 1 downTo start) shift(1, slot)
     }
 
     fun moveItem(itemId: Long, targetId: Long, shuffled: Boolean) {
@@ -281,7 +299,10 @@ class PlayQueueDaoWrapper(
     }
 
     fun deletePlayQueue() {
-        playQueueDao.deletePlayQueue()
+        libraryDatabase.runInTransaction {
+            playQueueDao.deletePlayQueue()
+            deletedItem = null
+        }
     }
 
     fun getPlayQueueSize() = playQueueDao.getPlayQueueSize()
@@ -293,7 +314,7 @@ class PlayQueueDaoWrapper(
             if (!playQueueDao.exists(itemId)) {
                 return@runInTransaction
             }
-            if (rememberFile) playQueueDao.rememberFilePosition(itemId, trackPosition)
+            if (rememberFile) playQueueDao.rememberFilePosition(itemId, trackPosition, System.currentTimeMillis())
             val currentPosition = playQueueDao.getTrackPosition(itemId)
             if (currentPosition == trackPosition) {
                 return@runInTransaction

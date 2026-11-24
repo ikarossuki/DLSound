@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">選擇音訊資料夾後，點選音軌開始學習。</string>
+    <string name="himitsu_audio_error">無法播放音訊。請確認仍可存取檔案，或選擇其他音軌。</string>
+    <string name="himitsu_directory_permission">資料夾存取權已失效，請重新選擇音訊資料夾。</string>
+    <string name="himitsu_directory_error">無法讀取資料夾。請確認資料夾仍存在，或重新選擇。</string>
+    <string name="himitsu_file_unavailable">無法再存取上次的音軌，請從資料夾重新選擇。</string>
+    <string name="himitsu_subtitle_loading">正在讀取字幕…</string>
+    <string name="himitsu_subtitle_folder_needed">允許存取音訊所在的資料夾後，播放器會自動讀取此資料夾及子資料夾中的同名字幕。</string>
+    <string name="himitsu_subtitle_missing">找不到同名字幕，可點選「字幕」手動選擇。</string>
+    <string name="himitsu_subtitle_empty">字幕沒有有效的時間標記，仍可播放音訊。</string>
+    <string name="himitsu_subtitle_auto">自動配對</string>
+    <string name="himitsu_subtitle_manual">手動選擇的字幕</string>
+    <string name="himitsu_subtitle_saved">已為原先選擇的音軌儲存字幕。</string>
+    <string name="himitsu_subtitle_error">無法讀取字幕。請檢查格式，或重新選擇檔案。</string>
+    <string name="himitsu_subtitle_large">字幕檔案過大，請依音軌拆分。</string>
+    <string name="himitsu_reading_busy">正在離線產生假名…</string>
+    <string name="himitsu_reading_failed">目前無法自動標音，字幕提供的讀音和個人修正仍可使用。</string>
+    <string name="himitsu_reading_edit">修正讀音</string>
+    <string name="himitsu_reading_none">這則字幕沒有可修正讀音的日文漢字。</string>
+    <string name="himitsu_reading_input">輸入平假名讀音</string>
+    <string name="himitsu_invalid_reading">請用平假名填寫讀音，可使用長音符號。</string>
+    <string name="himitsu_reading_restore">還原原本的讀音</string>
+    <string name="himitsu_reading_subtitle">字幕提供</string>
+    <string name="himitsu_reading_auto">自動產生</string>
+    <string name="himitsu_reading_personal">個人修正</string>
+    <string name="himitsu_reading_unset">未標註</string>
+    <string name="himitsu_save">儲存</string>
+    <string name="himitsu_cancel">取消</string>
+    <string name="dlsound_supported_subtitles">請選擇 VTT、LRC 或 SRT 字幕。</string>
+</resources>

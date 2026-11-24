@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Выберите папку с аудио и нажмите на дорожку, чтобы начать.</string>
+    <string name="himitsu_audio_error">Не удалось воспроизвести аудио. Проверьте доступ к файлу или выберите другую дорожку.</string>
+    <string name="himitsu_directory_permission">Доступ к папке истёк. Выберите папку с аудио ещё раз.</string>
+    <string name="himitsu_directory_error">Не удалось прочитать папку. Проверьте, существует ли она, или выберите другую.</string>
+    <string name="himitsu_file_unavailable">Предыдущая дорожка недоступна. Выберите дорожку в папке ещё раз.</string>
+    <string name="himitsu_subtitle_loading">Чтение субтитров…</string>
+    <string name="himitsu_subtitle_folder_needed">Разрешите доступ к папке с аудио, чтобы находить одноимённые субтитры в ней и её подпапках.</string>
+    <string name="himitsu_subtitle_missing">Одноимённые субтитры не найдены. Нажмите «Субтитры», чтобы выбрать файл.</string>
+    <string name="himitsu_subtitle_empty">В субтитрах нет допустимых меток времени. Аудио можно слушать дальше.</string>
+    <string name="himitsu_subtitle_auto">Автоматический подбор</string>
+    <string name="himitsu_subtitle_manual">Субтитры выбраны вручную</string>
+    <string name="himitsu_subtitle_saved">Субтитры сохранены для выбранной дорожки.</string>
+    <string name="himitsu_subtitle_error">Не удалось прочитать субтитры. Проверьте формат или выберите другой файл.</string>
+    <string name="himitsu_subtitle_large">Файл субтитров слишком большой. Разделите его по дорожкам.</string>
+    <string name="himitsu_reading_busy">Создание вариантов чтения без интернета…</string>
+    <string name="himitsu_reading_failed">Автоматическое чтение недоступно. Чтение из субтитров и ваши исправления по-прежнему работают.</string>
+    <string name="himitsu_reading_edit">Исправить чтение</string>
+    <string name="himitsu_reading_none">В этих субтитрах нет японских кандзи для исправления.</string>
+    <string name="himitsu_reading_input">Введите чтение хираганой</string>
+    <string name="himitsu_invalid_reading">Запишите чтение хираганой. Можно использовать знак долгой гласной.</string>
+    <string name="himitsu_reading_restore">Восстановить исходное чтение</string>
+    <string name="himitsu_reading_subtitle">Из субтитров</string>
+    <string name="himitsu_reading_auto">Создано автоматически</string>
+    <string name="himitsu_reading_personal">Личное исправление</string>
+    <string name="himitsu_reading_unset">Чтение не указано</string>
+    <string name="himitsu_save">Сохранить</string>
+    <string name="himitsu_cancel">Отмена</string>
+    <string name="dlsound_supported_subtitles">Выберите файл субтитров VTT, LRC или SRT.</string>
+</resources>

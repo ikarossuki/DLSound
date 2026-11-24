@@ -87,8 +87,8 @@ class CompositeMediaPlayer(
         currentPlayer.setVolume(volume)
     }
 
-    override fun getTrackPositionObservable(): Observable<Long> {
-        return currentPlayerSubject.switchMap(AppMediaPlayer::getTrackPositionObservable)
+    override fun getTrackPositionObservable(intervalMs: Long): Observable<Long> {
+        return currentPlayerSubject.switchMap { it.getTrackPositionObservable(intervalMs) }
     }
 
     override fun getTrackPosition(): Single<Long> {

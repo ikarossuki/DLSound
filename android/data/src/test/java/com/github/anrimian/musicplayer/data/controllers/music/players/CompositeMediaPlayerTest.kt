@@ -40,12 +40,12 @@ class CompositeMediaPlayerTest {
     @BeforeEach
     fun setUp() {
         whenever(player1.prepareToPlay(any(), anyOrNull())).thenReturn(Completable.complete())
-        whenever(player1.getTrackPositionObservable()).thenReturn(player1PositionSubject)
+        whenever(player1.getTrackPositionObservable(any())).thenReturn(player1PositionSubject)
         whenever(player1.getPlayerEventsObservable()).thenReturn(player1ErrorEventSubject)
         whenever(player1.getSpeedChangeAvailableObservable()).thenReturn(Observable.just(true))
 
         whenever(player2.prepareToPlay(any(), anyOrNull())).thenReturn(Completable.complete())
-        whenever(player2.getTrackPositionObservable()).thenReturn(player2PositionSubject)
+        whenever(player2.getTrackPositionObservable(any())).thenReturn(player2PositionSubject)
         whenever(player2.getPlayerEventsObservable()).thenReturn(player2ErrorEventSubject)
         whenever(player2.getSpeedChangeAvailableObservable()).thenReturn(Observable.just(true))
 

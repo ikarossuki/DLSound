@@ -81,11 +81,13 @@ class PlaybackSettingsDialogFragment : BottomSheetDialogFragment() {
     }
 
     private fun chooseReading() {
-        val current = latest.rendered.filter { it.cue.kind == CueKind.DIALOGUE && it.cue.activeAt(latest.position) }
-            .ifEmpty { latest.rendered.filter { it.cue.kind == CueKind.DIALOGUE }.sortedBy { kotlin.math.abs(it.cue.startMs - latest.position) }.take(1) }
+        val fingerprint = latest.document?.fingerprint ?: return
+        val track = latest.track ?: return
+        val captionTime = latest.position - LearningStore(requireContext()).offset(track.uri, fingerprint)
+        val current = latest.rendered.filter { it.cue.kind == CueKind.DIALOGUE && it.cue.activeAt(captionTime) }
+            .ifEmpty { latest.rendered.filter { it.cue.kind == CueKind.DIALOGUE }.sortedBy { kotlin.math.abs(it.cue.startMs - captionTime) }.take(1) }
         val choices = current.flatMap { rendered -> rendered.pieces.mapIndexedNotNull { index, piece -> if (containsKanji(piece.text)) Triple(rendered.cue.id, index, piece) else null } }
         if (choices.isEmpty()) { model.notice(R.string.himitsu_reading_none); return }
-        val fingerprint = latest.document?.fingerprint ?: return
         MaterialAlertDialogBuilder(requireContext()).setTitle(R.string.himitsu_reading_edit)
             .setItems(choices.map { "${it.third.text}  ${it.third.reading.orEmpty()}" }.toTypedArray()) { _, which -> val item = choices[which]; editReading(fingerprint, item.first, item.second) }
             .setNegativeButton(R.string.himitsu_cancel, null).show()
@@ -222,7 +224,7 @@ class PlaybackSettingsDialogFragment : BottomSheetDialogFragment() {
     override fun onViewCreated(view: View, state: Bundle?) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                model.state.collect { value ->
+                model.timedLibraryState.collect { value ->
                     latest = value
                     if (modes.checkedButtonId != modeIds.getValue(value.mode)) modes.check(modeIds.getValue(value.mode))
                     if (kana.isChecked != value.furigana) kana.isChecked = value.furigana

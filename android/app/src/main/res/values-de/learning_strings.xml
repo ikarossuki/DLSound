@@ -1,0 +1,30 @@
+<resources>
+    <string name="himitsu_no_track">Audioordner wählen und zum Starten auf einen Titel tippen.</string>
+    <string name="himitsu_audio_error">Audio kann nicht abgespielt werden. Dateizugriff prüfen oder einen anderen Titel wählen.</string>
+    <string name="himitsu_directory_permission">Der Ordnerzugriff ist abgelaufen. Bitte den Audioordner erneut wählen.</string>
+    <string name="himitsu_directory_error">Ordner kann nicht gelesen werden. Prüfen, ob er noch existiert, oder einen anderen wählen.</string>
+    <string name="himitsu_file_unavailable">Der letzte Titel ist nicht verfügbar. Bitte erneut einen Titel im Ordner wählen.</string>
+    <string name="himitsu_subtitle_loading">Untertitel werden gelesen…</string>
+    <string name="himitsu_subtitle_folder_needed">Den Zugriff auf den Audioordner erlauben, um gleichnamige Untertitel auch in Unterordnern zu finden.</string>
+    <string name="himitsu_subtitle_missing">Keine passenden Untertitel gefunden. Unter „Untertitel“ eine Datei wählen.</string>
+    <string name="himitsu_subtitle_empty">Die Untertitel enthalten keine gültigen Zeitangaben. Die Audiowiedergabe ist weiterhin möglich.</string>
+    <string name="himitsu_subtitle_auto">Automatisch zugeordnet</string>
+    <string name="himitsu_subtitle_manual">Manuell gewählte Untertitel</string>
+    <string name="himitsu_subtitle_saved">Untertitel für den gewählten Titel gespeichert.</string>
+    <string name="himitsu_subtitle_error">Untertitel können nicht gelesen werden. Format prüfen oder eine andere Datei wählen.</string>
+    <string name="himitsu_subtitle_large">Die Untertiteldatei ist zu groß. Bitte nach Titeln aufteilen.</string>
+    <string name="himitsu_reading_busy">Lesungen werden offline erstellt…</string>
+    <string name="himitsu_reading_failed">Automatische Lesungen sind nicht verfügbar. Lesungen aus Untertiteln und eigene Korrekturen bleiben nutzbar.</string>
+    <string name="himitsu_reading_edit">Lesung bearbeiten</string>
+    <string name="himitsu_reading_none">Dieser Untertitel enthält keine japanischen Kanji zum Korrigieren.</string>
+    <string name="himitsu_reading_input">Lesung in Hiragana eingeben</string>
+    <string name="himitsu_invalid_reading">Für die Lesung Hiragana verwenden. Das Längenzeichen ist erlaubt.</string>
+    <string name="himitsu_reading_restore">Ursprüngliche Lesung wiederherstellen</string>
+    <string name="himitsu_reading_subtitle">Aus den Untertiteln</string>
+    <string name="himitsu_reading_auto">Automatisch erstellt</string>
+    <string name="himitsu_reading_personal">Eigene Korrektur</string>
+    <string name="himitsu_reading_unset">Keine Lesung</string>
+    <string name="himitsu_save">Speichern</string>
+    <string name="himitsu_cancel">Abbrechen</string>
+    <string name="dlsound_supported_subtitles">Eine Untertiteldatei im Format VTT, LRC oder SRT wählen.</string>
+</resources>

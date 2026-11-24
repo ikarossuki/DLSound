@@ -16,7 +16,26 @@ $mappedDrive = $null
 $savedEnvironment = @{}
 $locationPushed = $false
 $exitStatus = 1
+$hash = [Security.Cryptography.SHA256]::Create()
 try {
+    $pathBytes = [Text.Encoding]::UTF8.GetBytes($physicalProjectRoot.ToUpperInvariant())
+    $checkoutId = [BitConverter]::ToString($hash.ComputeHash($pathBytes)).Replace('-', '')
+} finally {
+    $hash.Dispose()
+}
+$buildLock = [Threading.Mutex]::new($false, "Local\DLSound-Gradle-$checkoutId")
+$ownsBuildLock = $false
+try {
+# A different SUBST letter still points at the same Gradle outputs and project cache.
+try {
+    if (-not $buildLock.WaitOne(0)) {
+        Write-Host 'Waiting for the current Gradle build in this checkout.'
+        [void]$buildLock.WaitOne()
+    }
+    $ownsBuildLock = $true
+} catch [Threading.AbandonedMutexException] {
+    $ownsBuildLock = $true
+}
 # Java worker argument files on this Windows installation cannot load a non-ASCII classpath.
 # A temporary SUBST alias changes only the spelling; all files still reside in the workspace.
 if ($physicalProjectRoot -match '[^\x00-\x7F]') {
@@ -86,11 +105,25 @@ foreach ($name in $taskEnvironment.Keys) {
     if (-not $UseApprovedDependencies) { $gradleArguments = @('--offline') + $gradleArguments }
     & $gradleCommand @gradleArguments
     $exitStatus = $LASTEXITCODE
+    if ($exitStatus -eq 0) {
+        foreach ($task in $Tasks) {
+            if ($task -match '^:app:lite:assembleNowearModern(Debug|Release)$') {
+                $variant = $Matches[1].ToLowerInvariant()
+                $output = Join-Path $androidRoot "app/lite/build/outputs/apk/nowearModern/$variant"
+                $metadata = Get-Content -Raw -LiteralPath (Join-Path $output 'output-metadata.json') | ConvertFrom-Json
+                foreach ($item in $metadata.elements) {
+                    & (Join-Path $PSScriptRoot 'verify-native-apk.ps1') -Apk (Join-Path $output $item.outputFile)
+                }
+            }
+        }
+    }
 } finally {
     if ($locationPushed) { Pop-Location }
     foreach ($name in $savedEnvironment.Keys) {
         [Environment]::SetEnvironmentVariable($name, $savedEnvironment[$name], 'Process')
     }
     if ($mappedDrive) { & "$env:SystemRoot\System32\subst.exe" $mappedDrive /D }
+    if ($ownsBuildLock) { $buildLock.ReleaseMutex() }
+    $buildLock.Dispose()
 }
 exit $exitStatus

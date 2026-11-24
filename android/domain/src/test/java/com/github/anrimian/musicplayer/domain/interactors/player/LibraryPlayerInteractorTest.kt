@@ -84,7 +84,7 @@ class LibraryPlayerInteractorTest {
         whenever(playQueueRepository.getNextQueueItemId()).thenReturn(Single.just(1L))
         whenever(playQueueRepository.skipToNext()).thenReturn(Single.just(1))
         whenever(playQueueRepository.getItemTrackPosition(any())).thenReturn(Single.just(0L))
-        whenever(playQueueRepository.setItemTrackPosition(any(), any())).thenReturn(Completable.complete())
+        whenever(playQueueRepository.setItemTrackPosition(any(), any(), any())).thenReturn(Completable.complete())
         whenever(playQueueRepository.setCurrentItemTrackPosition(any())).thenReturn(Completable.complete())
 
         whenever(playerCoordinatorInteractor.getPlayerEventsObservable(any())).thenReturn(playerEventSubject)
@@ -189,6 +189,29 @@ class LibraryPlayerInteractorTest {
         @BeforeEach
         fun setUp() {
             libraryPlayerInteractor.prepare()
+        }
+
+        @Test
+        fun `a late pause reading cannot overwrite the next queue item`() {
+            val pending = io.reactivex.rxjava3.subjects.SingleSubject.create<Long>()
+            whenever(playerCoordinatorInteractor.getActualTrackPosition(PlayerType.LIBRARY)).thenReturn(pending)
+            playerStateSubject.onNext(PlayerState.PAUSE)
+            org.junit.jupiter.api.Assertions.assertTrue(pending.hasObservers())
+            val nextItem = mock<PlayQueueItem> {
+                on { itemId } doReturn 2L
+                on { duration } doReturn 60_000L
+            }
+            currentCompositionSubject.onNext(PlayQueueEvent(nextItem))
+            pending.onSuccess(9000L)
+            verify(playQueueRepository, never()).setItemTrackPosition(any(), eq(9000L), any())
+            verify(playQueueRepository, never()).setCurrentItemTrackPosition(9000L)
+        }
+
+        @Test
+        fun `pause saves the actual decoder position for the prepared queue item`() {
+            whenever(playerCoordinatorInteractor.getActualTrackPosition(PlayerType.LIBRARY)).thenReturn(Single.just(9500L))
+            playerStateSubject.onNext(PlayerState.PAUSE)
+            verify(playQueueRepository).setItemTrackPosition(playQueueItem.itemId, 9500L, true)
         }
 
         @Test

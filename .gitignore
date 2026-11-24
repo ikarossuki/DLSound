@@ -1,5 +1,6 @@
 # Local builds, downloaded archives, caches and test evidence stay in the workspace.
 .local/
+/web-ui/
 downloads/
 scratch/
 artifacts/
